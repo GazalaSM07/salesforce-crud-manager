@@ -1,0 +1,966 @@
+/* =========================================================
+   GLOBAL
+========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+
+  background: #f4f7fb;
+  color: #1f2937;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+}
+
+
+/* =========================================================
+   APP
+========================================================= */
+
+.app {
+  min-height: 100vh;
+  background:
+    linear-gradient(
+      135deg,
+      #eef4ff 0%,
+      #f8fbff 45%,
+      #f4f7fb 100%
+    );
+}
+
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.header {
+  background:
+    linear-gradient(
+      135deg,
+      #0b5cab,
+      #0176d3,
+      #1b96ff
+    );
+
+  color: white;
+
+  padding: 24px 40px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 20px;
+
+  box-shadow:
+    0 4px 15px rgba(0, 0, 0, 0.12);
+}
+
+.header h1 {
+  margin: 0 0 6px 0;
+
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.header p {
+  margin: 0;
+
+  font-size: 14px;
+
+  color: rgba(255, 255, 255, 0.9);
+}
+
+
+/* =========================================================
+   MAIN
+========================================================= */
+
+.main {
+  max-width: 1500px;
+
+  margin: 0 auto;
+
+  padding: 30px 35px 60px;
+}
+
+
+/* =========================================================
+   LOGIN
+========================================================= */
+
+.login-message {
+  max-width: 600px;
+
+  margin: 100px auto;
+
+  background: white;
+
+  padding: 45px;
+
+  border-radius: 16px;
+
+  text-align: center;
+
+  box-shadow:
+    0 10px 35px rgba(0, 0, 0, 0.08);
+}
+
+.login-message h2 {
+  margin-top: 0;
+
+  color: #0b5cab;
+}
+
+.login-message p {
+  color: #64748b;
+
+  margin-bottom: 30px;
+}
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+button {
+  border: none;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+
+  transform: none;
+}
+
+
+/* LOGIN */
+
+.login-button {
+  background: white;
+
+  color: #0b5cab;
+
+  padding: 11px 20px;
+
+  border-radius: 8px;
+
+  font-weight: 600;
+
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+.login-button:hover {
+  background: #f0f7ff;
+}
+
+.login-button.large {
+  padding: 13px 25px;
+
+  font-size: 16px;
+}
+
+
+/* LOGOUT */
+
+.logout-button {
+  background: #dc2626;
+
+  color: white;
+
+  padding: 10px 20px;
+
+  border-radius: 8px;
+
+  font-weight: 600;
+}
+
+.logout-button:hover {
+  background: #b91c1c;
+}
+
+
+/* CREATE */
+
+.create-button {
+  background:
+    linear-gradient(
+      135deg,
+      #0176d3,
+      #0b5cab
+    );
+
+  color: white;
+
+  padding: 11px 20px;
+
+  border-radius: 8px;
+
+  font-weight: 600;
+
+  box-shadow:
+    0 4px 10px rgba(1, 118, 211, 0.2);
+}
+
+.create-button:hover {
+  background:
+    linear-gradient(
+      135deg,
+      #0b5cab,
+      #014486
+    );
+}
+
+
+/* =========================================================
+   TOOLBAR
+========================================================= */
+
+.toolbar {
+  background: white;
+
+  border-radius: 14px;
+
+  padding: 20px 24px;
+
+  margin-bottom: 20px;
+
+  display: flex;
+
+  align-items: flex-end;
+
+  justify-content: space-between;
+
+  gap: 20px;
+
+  box-shadow:
+    0 5px 20px rgba(0, 0, 0, 0.06);
+}
+
+.object-selector {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 7px;
+}
+
+.object-selector label {
+  font-size: 13px;
+
+  font-weight: 600;
+
+  color: #475569;
+}
+
+.object-selector select {
+  min-width: 220px;
+
+  padding: 11px 14px;
+
+  border: 1px solid #cbd5e1;
+
+  border-radius: 8px;
+
+  background: white;
+
+  color: #1e293b;
+
+  font-size: 15px;
+
+  outline: none;
+}
+
+.object-selector select:focus {
+  border-color: #0176d3;
+
+  box-shadow:
+    0 0 0 3px rgba(1, 118, 211, 0.12);
+}
+
+
+/* =========================================================
+   ERROR
+========================================================= */
+
+.error-message {
+  background: #fef2f2;
+
+  color: #b91c1c;
+
+  border: 1px solid #fecaca;
+
+  padding: 14px 18px;
+
+  border-radius: 8px;
+
+  margin-bottom: 20px;
+
+  font-weight: 500;
+}
+
+
+/* =========================================================
+   RECORD INFORMATION
+========================================================= */
+
+.record-info {
+  background: white;
+
+  border-radius: 12px;
+
+  padding: 16px 20px;
+
+  margin-bottom: 15px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 15px;
+
+  box-shadow:
+    0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.record-info strong {
+  color: #0b5cab;
+
+  font-size: 18px;
+}
+
+.record-info span {
+  color: #64748b;
+
+  font-size: 14px;
+}
+
+
+/* =========================================================
+   RECORD SECTION
+========================================================= */
+
+.records-section {
+  background: white;
+
+  border-radius: 14px;
+
+  box-shadow:
+    0 5px 20px rgba(0, 0, 0, 0.06);
+
+  overflow: hidden;
+}
+
+.section-header {
+  padding: 20px 24px;
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  gap: 20px;
+
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.section-header h2 {
+  margin: 0 0 5px 0;
+
+  color: #0f172a;
+
+  font-size: 21px;
+}
+
+.section-header p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+.record-count {
+  background: #e0f2fe;
+
+  color: #0369a1;
+
+  padding: 8px 14px;
+
+  border-radius: 20px;
+
+  font-size: 14px;
+
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   TABLE CONTAINER
+========================================================= */
+
+.table-container {
+  width: 100%;
+
+  overflow-x: auto;
+
+  overflow-y: visible;
+}
+
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+table {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  min-width: 950px;
+}
+
+thead {
+  background:
+    linear-gradient(
+      90deg,
+      #f0f7ff,
+      #f8fbff
+    );
+}
+
+th {
+  padding: 14px 16px;
+
+  text-align: left;
+
+  font-size: 13px;
+
+  font-weight: 700;
+
+  color: #334155;
+
+  border-bottom: 2px solid #cbd5e1;
+
+  white-space: nowrap;
+}
+
+td {
+  padding: 13px 16px;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  font-size: 14px;
+
+  color: #334155;
+
+  white-space: nowrap;
+
+  vertical-align: middle;
+}
+
+tbody tr {
+  background: white;
+
+  transition:
+    background 0.15s ease;
+}
+
+tbody tr:hover {
+  background: #f8fbff;
+}
+
+
+/* =========================================================
+   ACTIONS COLUMN
+   IMPORTANT:
+   Keeps View / Edit / Delete on ONE LINE
+========================================================= */
+
+th:first-child {
+  width: 245px;
+
+  min-width: 245px;
+
+  text-align: center;
+}
+
+td:first-child {
+  width: 245px;
+
+  min-width: 245px;
+
+  padding-left: 10px;
+
+  padding-right: 10px;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   ACTION BUTTON CONTAINER
+========================================================= */
+
+.actions {
+  display: flex;
+
+  flex-direction: row;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 7px;
+
+  flex-wrap: nowrap;
+
+  white-space: nowrap;
+
+  width: 100%;
+}
+
+
+/* =========================================================
+   VIEW BUTTON
+========================================================= */
+
+.view-button {
+  background: #e0f2fe;
+
+  color: #0369a1;
+
+  border: 1px solid #bae6fd;
+
+  padding: 7px 10px;
+
+  border-radius: 6px;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  white-space: nowrap;
+
+  min-width: 50px;
+}
+
+.view-button:hover {
+  background: #bae6fd;
+}
+
+
+/* =========================================================
+   EDIT BUTTON
+========================================================= */
+
+.edit-button {
+  background: #fef3c7;
+
+  color: #92400e;
+
+  border: 1px solid #fde68a;
+
+  padding: 7px 10px;
+
+  border-radius: 6px;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  white-space: nowrap;
+
+  min-width: 50px;
+}
+
+.edit-button:hover {
+  background: #fde68a;
+}
+
+
+/* =========================================================
+   DELETE BUTTON
+========================================================= */
+
+.delete-button {
+  background: #fee2e2;
+
+  color: #b91c1c;
+
+  border: 1px solid #fecaca;
+
+  padding: 7px 10px;
+
+  border-radius: 6px;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  white-space: nowrap;
+
+  min-width: 55px;
+}
+
+.delete-button:hover {
+  background: #fecaca;
+}
+
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading {
+  padding: 60px 20px;
+
+  text-align: center;
+
+  color: #64748b;
+
+  font-size: 16px;
+}
+
+
+/* =========================================================
+   LOADING MORE
+========================================================= */
+
+.loading-more {
+  padding: 22px;
+
+  text-align: center;
+
+  color: #0176d3;
+
+  font-weight: 600;
+
+  background: #f8fbff;
+
+  border-top: 1px solid #e2e8f0;
+}
+
+
+/* =========================================================
+   ALL RECORDS LOADED
+========================================================= */
+
+.no-more-records {
+  padding: 20px;
+
+  text-align: center;
+
+  color: #16a34a;
+
+  background: #f0fdf4;
+
+  border-top: 1px solid #bbf7d0;
+
+  font-size: 14px;
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   EMPTY TABLE
+========================================================= */
+
+tbody td[colspan] {
+  text-align: center;
+
+  padding: 50px 20px;
+
+  color: #64748b;
+}
+
+
+/* =========================================================
+   MODAL OVERLAY
+========================================================= */
+
+.form-overlay {
+  position: fixed;
+
+  inset: 0;
+
+  background:
+    rgba(15, 23, 42, 0.55);
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding: 20px;
+
+  z-index: 1000;
+
+  overflow-y: auto;
+}
+
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.form-modal {
+  width: 100%;
+
+  max-width: 600px;
+
+  max-height: 90vh;
+
+  overflow-y: auto;
+
+  background: white;
+
+  border-radius: 16px;
+
+  padding: 28px;
+
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.25);
+}
+
+.form-modal h2 {
+  margin-top: 0;
+
+  margin-bottom: 24px;
+
+  color: #0b5cab;
+
+  font-size: 22px;
+}
+
+
+/* =========================================================
+   FORM
+========================================================= */
+
+.form-group {
+  margin-bottom: 17px;
+}
+
+.form-group label {
+  display: block;
+
+  margin-bottom: 7px;
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  color: #475569;
+}
+
+.form-group input {
+  width: 100%;
+
+  padding: 11px 13px;
+
+  border: 1px solid #cbd5e1;
+
+  border-radius: 8px;
+
+  outline: none;
+
+  font-size: 14px;
+
+  color: #1e293b;
+
+  background: white;
+}
+
+.form-group input:focus {
+  border-color: #0176d3;
+
+  box-shadow:
+    0 0 0 3px rgba(1, 118, 211, 0.12);
+}
+
+
+/* =========================================================
+   FORM BUTTONS
+========================================================= */
+
+.form-buttons {
+  display: flex;
+
+  justify-content: flex-end;
+
+  align-items: center;
+
+  gap: 10px;
+
+  margin-top: 25px;
+
+  padding-top: 18px;
+
+  border-top: 1px solid #e2e8f0;
+}
+
+.cancel-button {
+  background: #e2e8f0;
+
+  color: #334155;
+
+  padding: 10px 18px;
+
+  border-radius: 8px;
+
+  font-weight: 600;
+}
+
+.cancel-button:hover {
+  background: #cbd5e1;
+}
+
+
+/* =========================================================
+   VIEW RECORD
+========================================================= */
+
+.view-record {
+  display: flex;
+
+  flex-direction: column;
+}
+
+
+/* =========================================================
+   RESPONSIVE - TABLET
+========================================================= */
+
+@media (max-width: 900px) {
+
+  .header {
+    padding: 20px 25px;
+  }
+
+  .main {
+    padding: 25px 20px 50px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+  .object-selector select {
+    width: 100%;
+  }
+
+  .toolbar .create-button {
+    width: 100%;
+  }
+
+  .record-info {
+    flex-direction: column;
+
+    align-items: flex-start;
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE - MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+
+  .header {
+    flex-direction: column;
+
+    align-items: flex-start;
+
+    padding: 18px 20px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+  }
+
+  .main {
+    padding: 18px 12px 40px;
+  }
+
+  .login-message {
+    margin: 50px auto;
+
+    padding: 30px 20px;
+  }
+
+  .section-header {
+    padding: 16px;
+
+    flex-direction: column;
+
+    align-items: flex-start;
+  }
+
+  .record-count {
+    align-self: flex-start;
+  }
+
+  .form-modal {
+    padding: 22px;
+
+    max-height: 95vh;
+  }
+
+  /*
+     Keep actions horizontal even on mobile.
+     The table will scroll horizontally instead.
+  */
+
+  th:first-child,
+  td:first-child {
+    width: 245px;
+
+    min-width: 245px;
+  }
+
+  .actions {
+    flex-wrap: nowrap;
+
+    gap: 6px;
+  }
+}
