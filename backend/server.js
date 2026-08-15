@@ -7,7 +7,9 @@ const crypto = require("crypto");
 
 const app = express();
 
-const PORT = 5000;
+// Render provides PORT automatically.
+// Locally, it will use 5000.
+const PORT = process.env.PORT || 5000;
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL ||
@@ -80,13 +82,11 @@ function base64UrlEncode(buffer) {
     .replace(/=/g, "");
 }
 
-
 function createCodeVerifier() {
   return base64UrlEncode(
     crypto.randomBytes(32)
   );
 }
-
 
 function createCodeChallenge(verifier) {
   return base64UrlEncode(
@@ -96,6 +96,19 @@ function createCodeChallenge(verifier) {
       .digest()
   );
 }
+
+
+// ==================================================
+// HEALTH CHECK
+// ==================================================
+
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message:
+      "Salesforce CRUD Manager Backend is running",
+  });
+});
 
 
 // ==================================================
@@ -441,13 +454,7 @@ const fieldMap = {
 
 // ==================================================
 // GET RECORDS
-//
-// IMPORTANT:
-// We use ONLY page + offset pagination.
-//
-// Page 1 = offset 0
-// Page 2 = offset 20
-// Page 3 = offset 40
+// 20 RECORDS PER PAGE
 // ==================================================
 
 app.get(
@@ -459,10 +466,6 @@ app.get(
         objectName,
       } = req.params;
 
-      // ------------------------------------------
-      // VALIDATE OBJECT
-      // ------------------------------------------
-
       if (
         !allowedObjects.includes(
           objectName
@@ -473,11 +476,6 @@ app.get(
             "Invalid Salesforce object.",
         });
       }
-
-
-      // ------------------------------------------
-      // PAGE
-      // ------------------------------------------
 
       const requestedPage =
         parseInt(
@@ -493,25 +491,10 @@ app.get(
           ? requestedPage
           : 1;
 
-
-      // ------------------------------------------
-      // PAGE SIZE
-      // ------------------------------------------
-
       const pageSize = 20;
-
-
-      // ------------------------------------------
-      // OFFSET
-      // ------------------------------------------
 
       const offset =
         (page - 1) * pageSize;
-
-
-      // ------------------------------------------
-      // SALESFORCE SESSION
-      // ------------------------------------------
 
       const accessToken =
         req.session.salesforce
@@ -536,7 +519,6 @@ app.get(
           countQuery
         );
 
-
       const countResponse =
         await fetch(
           countUrl,
@@ -550,10 +532,8 @@ app.get(
           }
         );
 
-
       const countData =
         await countResponse.json();
-
 
       if (!countResponse.ok) {
         console.error(
@@ -572,7 +552,6 @@ app.get(
         });
       }
 
-
       const totalSize =
         Number(
           countData.totalSize || 0
@@ -581,10 +560,6 @@ app.get(
 
       // ------------------------------------------
       // SOQL QUERY
-      //
-      // IMPORTANT:
-      // Stable ORDER BY prevents records from
-      // moving between pages during pagination.
       // ------------------------------------------
 
       const query =
@@ -594,14 +569,12 @@ app.get(
         `LIMIT ${pageSize} ` +
         `OFFSET ${offset}`;
 
-
       const url =
         `${instanceUrl}/services/data/` +
         `${API_VERSION}/query/?q=` +
         encodeURIComponent(
           query
         );
-
 
       console.log(
         "=============================================="
@@ -658,10 +631,8 @@ app.get(
           }
         );
 
-
       const data =
         await response.json();
-
 
       if (!response.ok) {
         console.error(
@@ -680,7 +651,6 @@ app.get(
         });
       }
 
-
       const records =
         data.records || [];
 
@@ -693,37 +663,10 @@ app.get(
         offset + records.length <
         totalSize;
 
-
       const nextPage =
         hasMore
           ? page + 1
           : null;
-
-
-      console.log(
-        "Records returned:",
-        records.length
-      );
-
-      console.log(
-        "Total Salesforce records:",
-        totalSize
-      );
-
-      console.log(
-        "Has more:",
-        hasMore
-      );
-
-      console.log(
-        "Next page:",
-        nextPage
-      );
-
-
-      // ------------------------------------------
-      // RESPONSE
-      // ------------------------------------------
 
       return res.json({
         object:
@@ -803,12 +746,10 @@ app.post(
         `${API_VERSION}/sobjects/` +
         `${objectName}`;
 
-
       console.log(
         "CREATE:",
         objectName
       );
-
 
       const response =
         await fetch(
@@ -831,10 +772,8 @@ app.post(
           }
         );
 
-
       const responseText =
         await response.text();
-
 
       let data = {};
 
@@ -852,7 +791,6 @@ app.post(
         }
       }
 
-
       if (!response.ok) {
         console.error(
           "Salesforce CREATE error:",
@@ -869,7 +807,6 @@ app.post(
             data,
         });
       }
-
 
       return res.status(201).json({
         success: true,
@@ -913,7 +850,6 @@ app.patch(
         recordId,
       } = req.params;
 
-
       if (
         !allowedObjects.includes(
           objectName
@@ -925,14 +861,12 @@ app.patch(
         });
       }
 
-
       if (!recordId) {
         return res.status(400).json({
           error:
             "Record ID is required.",
         });
       }
-
 
       const accessToken =
         req.session.salesforce
@@ -942,13 +876,11 @@ app.patch(
         req.session.salesforce
           .instanceUrl;
 
-
       const url =
         `${instanceUrl}/services/data/` +
         `${API_VERSION}/sobjects/` +
         `${objectName}/` +
         `${recordId}`;
-
 
       const response =
         await fetch(
@@ -971,10 +903,8 @@ app.patch(
           }
         );
 
-
       const responseText =
         await response.text();
-
 
       if (!response.ok) {
         let errorData;
@@ -991,12 +921,10 @@ app.patch(
           };
         }
 
-
         console.error(
           "Salesforce UPDATE error:",
           errorData
         );
-
 
         return res.status(
           response.status
@@ -1008,7 +936,6 @@ app.patch(
             errorData,
         });
       }
-
 
       return res.json({
         success: true,
@@ -1052,7 +979,6 @@ app.delete(
         recordId,
       } = req.params;
 
-
       if (
         !allowedObjects.includes(
           objectName
@@ -1064,14 +990,12 @@ app.delete(
         });
       }
 
-
       if (!recordId) {
         return res.status(400).json({
           error:
             "Record ID is required.",
         });
       }
-
 
       const accessToken =
         req.session.salesforce
@@ -1081,20 +1005,17 @@ app.delete(
         req.session.salesforce
           .instanceUrl;
 
-
       const url =
         `${instanceUrl}/services/data/` +
         `${API_VERSION}/sobjects/` +
         `${objectName}/` +
         `${recordId}`;
 
-
       console.log(
         "DELETE:",
         objectName,
         recordId
       );
-
 
       const response =
         await fetch(
@@ -1109,10 +1030,8 @@ app.delete(
           }
         );
 
-
       const responseText =
         await response.text();
-
 
       if (!response.ok) {
         let errorData;
@@ -1129,12 +1048,10 @@ app.delete(
           };
         }
 
-
         console.error(
           "Salesforce DELETE error:",
           errorData
         );
-
 
         return res.status(
           response.status
@@ -1146,7 +1063,6 @@ app.delete(
             errorData,
         });
       }
-
 
       return res.json({
         success: true,
