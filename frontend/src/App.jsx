@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import "./App.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "";
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  "https://salesforce-crud-backend-rffk.onrender.com";
 
 const OBJECTS = [
   "Account",
@@ -10,54 +13,7 @@ const OBJECTS = [
   "Case",
 ];
 
-const FIELD_MAP = {
-  Account: [
-    "Id",
-    "Name",
-    "Phone",
-    "Website",
-    "Industry",
-    "Type",
-  ],
-
-  Opportunity: [
-    "Id",
-    "Name",
-    "Amount",
-    "StageName",
-    "CloseDate",
-    "Type",
-  ],
-
-  Lead: [
-    "Id",
-    "FirstName",
-    "LastName",
-    "Company",
-    "Email",
-    "Phone",
-  ],
-
-  Contact: [
-    "Id",
-    "FirstName",
-    "LastName",
-    "Email",
-    "Phone",
-    "Department",
-  ],
-
-  Case: [
-    "Id",
-    "Subject",
-    "Status",
-    "Priority",
-    "Origin",
-    "Description",
-  ],
-};
-
-const CREATE_FIELDS = {
+const FIELD_CONFIG = {
   Account: [
     "Name",
     "Phone",
@@ -98,470 +54,277 @@ const CREATE_FIELDS = {
     "Description",
   ],
 };
-
-const LABELS = {
-  Id: "ID",
-  Name: "Name",
-  Phone: "Phone",
-  Website: "Website",
-  Industry: "Industry",
-  Type: "Type",
-  Amount: "Amount",
-  StageName: "Stage",
-  CloseDate: "Close Date",
-  FirstName: "First Name",
-  LastName: "Last Name",
-  Company: "Company",
-  Email: "Email",
-  Department: "Department",
-  Subject: "Subject",
-  Status: "Status",
-  Priority: "Priority",
-  Origin: "Origin",
-  Description: "Description",
-};
-
-function getLabel(field) {
-  return LABELS[field] || field;
-}
-
-function formatValue(value) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-    return "—";
-  }
-
-  return String(value);
-}
-
-function getInputType(field) {
-  if (field === "Amount") {
-    return "number";
-  }
-
-  if (field === "CloseDate") {
-    return "date";
-  }
-
-  if (field === "Email") {
-    return "email";
-  }
-
-  if (field === "Website") {
-    return "url";
-  }
-
-  if (field === "Description") {
-    return "textarea";
-  }
-
-  return "text";
-}
-
-function getInitials(record, objectName) {
-  if (objectName === "Account") {
-    return (
-      record?.Name?.substring(0, 2).toUpperCase() ||
-      "AC"
-    );
-  }
-
-  if (
-    objectName === "Lead" ||
-    objectName === "Contact"
-  ) {
-    const first =
-      record?.FirstName?.[0] || "";
-
-    const last =
-      record?.LastName?.[0] || "";
-
-    return (
-      `${first}${last}`.toUpperCase() ||
-      "US"
-    );
-  }
-
-  if (objectName === "Opportunity") {
-    return "OP";
-  }
-
-  if (objectName === "Case") {
-    return "CS";
-  }
-
-  return "SF";
-}
-
-function getBadgeClass(field, value) {
-  if (!value) {
-    return "";
-  }
-
-  const normalized =
-    String(value).toLowerCase();
-
-  if (
-    field === "StageName" ||
-    field === "Status"
-  ) {
-    if (
-      normalized.includes("closed") ||
-      normalized.includes("won") ||
-      normalized.includes("completed") ||
-      normalized.includes("resolved")
-    ) {
-      return "badge-success";
-    }
-
-    if (
-      normalized.includes("lost") ||
-      normalized.includes("cancel") ||
-      normalized.includes("rejected")
-    ) {
-      return "badge-danger";
-    }
-
-    if (
-      normalized.includes("progress") ||
-      normalized.includes("open") ||
-      normalized.includes("working")
-    ) {
-      return "badge-warning";
-    }
-
-    return "badge-info";
-  }
-
-  if (field === "Priority") {
-    if (
-      normalized.includes("high") ||
-      normalized.includes("critical")
-    ) {
-      return "badge-danger";
-    }
-
-    if (normalized.includes("medium")) {
-      return "badge-warning";
-    }
-
-    if (normalized.includes("low")) {
-      return "badge-success";
-    }
-  }
-
-  return "";
-}
 
 function App() {
-  const [authenticated, setAuthenticated] =
-    useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  const [checkingAuth, setCheckingAuth] =
-    useState(true);
-
-  const [objectName, setObjectName] =
+  const [selectedObject, setSelectedObject] =
     useState("Account");
 
-  const [records, setRecords] =
-    useState([]);
+  const [records, setRecords] = useState([]);
+  const [totalSize, setTotalSize] = useState(0);
 
-  const [totalSize, setTotalSize] =
-    useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [hasMore, setHasMore] = useState(false);
 
-  const [page, setPage] =
-    useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  const [hasMore, setHasMore] =
-    useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
-  const [loading, setLoading] =
-    useState(false);
+  const [formData, setFormData] = useState({});
 
-  const [loadingMore, setLoadingMore] =
-    useState(false);
+  // ============================================================
+  // AUTH STATUS
+  // ============================================================
 
-  const [error, setError] =
-    useState("");
-
-  const [successMessage, setSuccessMessage] =
-    useState("");
-
-  const [modal, setModal] =
-    useState(null);
-
-  const [selectedRecord, setSelectedRecord] =
-    useState(null);
-
-  const [formData, setFormData] =
-    useState({});
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [deleting, setDeleting] =
-    useState(false);
-
-  const [searchTerm, setSearchTerm] =
-    useState("");
-
-  const loaderRef = useRef(null);
-
-  // ==================================================
-  // AUTO HIDE SUCCESS MESSAGE
-  // ==================================================
-
-  useEffect(() => {
-    if (!successMessage) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setSuccessMessage("");
-    }, 4000);
-
-    return () => clearTimeout(timer);
-  }, [successMessage]);
-
-  // ==================================================
-  // CHECK AUTHENTICATION
-  // ==================================================
-
-  const checkAuth = useCallback(async () => {
+  const checkAuth = async () => {
     try {
       setCheckingAuth(true);
+      setError("");
 
       const response = await fetch(
-        `${API_URL}/auth/status`,
+        `${API_BASE}/auth/status`,
         {
+          method: "GET",
+
+          // IMPORTANT:
+          // This sends the Render session cookie.
           credentials: "include",
+
+          headers: {
+            Accept: "application/json",
+          },
         }
       );
 
-      const data =
-        await response.json();
+      if (!response.ok) {
+        throw new Error(
+          `Auth status failed: ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      console.log("AUTH STATUS:", data);
 
       setAuthenticated(
-        Boolean(data.authenticated)
+        data.authenticated === true
       );
     } catch (err) {
       console.error(
-        "Authentication check failed:",
+        "Auth status error:",
         err
       );
 
       setAuthenticated(false);
+
+      setError(
+        "Unable to check Salesforce login status."
+      );
     } finally {
       setCheckingAuth(false);
     }
-  }, []);
+  };
+
+  // ============================================================
+  // INITIAL AUTH CHECK
+  // ============================================================
 
   useEffect(() => {
     checkAuth();
-  }, [checkAuth]);
+  }, []);
 
-  // ==================================================
+  // ============================================================
   // LOAD RECORDS
-  // ==================================================
+  // ============================================================
 
-  const loadRecords = useCallback(
-    async (
-      requestedPage = 1,
-      append = false
-    ) => {
-      try {
-        if (append) {
-          setLoadingMore(true);
-        } else {
-          setLoading(true);
-        }
-
-        setError("");
-
-        const response = await fetch(
-          `${API_URL}/api/records/${objectName}?page=${requestedPage}`,
-          {
-            credentials: "include",
-          }
-        );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.error ||
-              "Failed to load records."
-          );
-        }
-
-        const incomingRecords =
-          data.records || [];
-
-        if (append) {
-          setRecords((previous) => [
-            ...previous,
-            ...incomingRecords,
-          ]);
-        } else {
-          setRecords(incomingRecords);
-        }
-
-        setTotalSize(
-          Number(data.totalSize || 0)
-        );
-
-        setPage(
-          Number(
-            data.page ||
-              requestedPage
-          )
-        );
-
-        setHasMore(
-          Boolean(data.hasMore)
-        );
-      } catch (err) {
-        console.error(
-          "Load records error:",
-          err
-        );
-
-        if (
-          err.message
-            .toLowerCase()
-            .includes(
-              "not authenticated"
-            )
-        ) {
-          setAuthenticated(false);
-        }
-
-        setError(err.message);
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [objectName]
-  );
-
-  // ==================================================
-  // LOAD FIRST PAGE
-  // ==================================================
-
-  useEffect(() => {
+  const loadRecords = async (
+    objectName = selectedObject,
+    requestedPage = page
+  ) => {
     if (!authenticated) {
       return;
     }
 
-    setRecords([]);
-    setPage(0);
-    setHasMore(false);
-    setSearchTerm("");
+    try {
+      setLoading(true);
+      setError("");
+      setMessage("");
 
-    loadRecords(1, false);
-  }, [
-    authenticated,
-    objectName,
-    loadRecords,
-  ]);
-
-  // ==================================================
-  // INFINITE SCROLL
-  // ==================================================
-
-  useEffect(() => {
-    const element =
-      loaderRef.current;
-
-    if (!element) {
-      return;
-    }
-
-    if (!hasMore) {
-      return;
-    }
-
-    const observer =
-      new IntersectionObserver(
-        (entries) => {
-          const firstEntry =
-            entries[0];
-
-          if (
-            firstEntry.isIntersecting &&
-            !loadingMore &&
-            !loading
-          ) {
-            loadRecords(
-              page + 1,
-              true
-            );
-          }
-        },
+      const response = await fetch(
+        `${API_BASE}/api/records/${objectName}?page=${requestedPage}`,
         {
-          root: null,
-          rootMargin: "250px",
-          threshold: 0,
+          method: "GET",
+
+          // IMPORTANT:
+          // Send Salesforce session cookie.
+          credentials: "include",
+
+          headers: {
+            Accept: "application/json",
+          },
         }
       );
 
-    observer.observe(element);
+      const data = await response.json();
 
-    return () => {
-      observer.disconnect();
-    };
+      console.log(
+        "RECORD RESPONSE:",
+        data
+      );
+
+      if (response.status === 401) {
+        setAuthenticated(false);
+
+        setError(
+          "Your Salesforce session has expired. Please login again."
+        );
+
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Failed to load records."
+        );
+      }
+
+      setRecords(
+        Array.isArray(data.records)
+          ? data.records
+          : []
+      );
+
+      setTotalSize(
+        Number(data.totalSize || 0)
+      );
+
+      setPage(
+        Number(data.page || requestedPage)
+      );
+
+      setPageSize(
+        Number(data.pageSize || 20)
+      );
+
+      setHasMore(
+        data.hasMore === true
+      );
+    } catch (err) {
+      console.error(
+        "Load records error:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Could not load Salesforce records."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // LOAD WHEN OBJECT CHANGES
+  // ============================================================
+
+  useEffect(() => {
+    if (authenticated) {
+      setPage(1);
+      loadRecords(
+        selectedObject,
+        1
+      );
+    }
   }, [
-    hasMore,
-    loadingMore,
-    loading,
-    page,
-    loadRecords,
+    authenticated,
+    selectedObject,
   ]);
 
-  // ==================================================
-  // LOGIN
-  // ==================================================
+  // ============================================================
+  // SALESFORCE LOGIN
+  // ============================================================
 
-  function login() {
+  const loginWithSalesforce = () => {
+    setError("");
+    setMessage("");
+
+    /*
+      IMPORTANT:
+
+      We redirect the browser directly to the backend OAuth route.
+
+      Do NOT use fetch() here.
+
+      The backend will redirect to Salesforce.
+    */
+
     window.location.href =
-      `${API_URL}/auth/login`;
-  }
+      `${API_BASE}/auth/login`;
+  };
 
-  // ==================================================
+  // ============================================================
   // LOGOUT
-  // ==================================================
+  // ============================================================
 
-  async function logout() {
+  const logout = async () => {
     try {
-      await fetch(
-        `${API_URL}/auth/logout`,
+      setError("");
+      setMessage("");
+
+      const response = await fetch(
+        `${API_BASE}/auth/logout`,
         {
+          method: "GET",
+
+          // IMPORTANT:
+          // Send the session cookie so backend
+          // can destroy the correct session.
           credentials: "include",
         }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Logout failed."
+        );
+      }
+
+      setAuthenticated(false);
+      setRecords([]);
+      setTotalSize(0);
+      setPage(1);
+
+      setMessage(
+        "Logged out successfully."
       );
     } catch (err) {
       console.error(
         "Logout error:",
         err
       );
+
+      setError(
+        err.message ||
+          "Logout failed."
+      );
     }
+  };
 
-    setAuthenticated(false);
-    setRecords([]);
-  }
+  // ============================================================
+  // FORM
+  // ============================================================
 
-  // ==================================================
-  // CREATE
-  // ==================================================
-
-  function openCreate() {
+  const openCreateForm = () => {
     const fields =
-      CREATE_FIELDS[objectName] || [];
+      FIELD_CONFIG[selectedObject] || [];
 
     const initialData = {};
 
@@ -569,29 +332,16 @@ function App() {
       initialData[field] = "";
     });
 
+    setEditingRecord(null);
     setFormData(initialData);
-    setSelectedRecord(null);
-    setModal("create");
+    setShowForm(true);
     setError("");
-  }
+    setMessage("");
+  };
 
-  // ==================================================
-  // VIEW
-  // ==================================================
-
-  function openView(record) {
-    setSelectedRecord(record);
-    setModal("view");
-    setError("");
-  }
-
-  // ==================================================
-  // EDIT
-  // ==================================================
-
-  function openEdit(record) {
+  const openEditForm = (record) => {
     const fields =
-      CREATE_FIELDS[objectName] || [];
+      FIELD_CONFIG[selectedObject] || [];
 
     const initialData = {};
 
@@ -600,187 +350,153 @@ function App() {
         record[field] ?? "";
     });
 
-    setSelectedRecord(record);
+    setEditingRecord(record);
     setFormData(initialData);
-    setModal("edit");
+    setShowForm(true);
     setError("");
-  }
+    setMessage("");
+  };
 
-  // ==================================================
-  // CLOSE MODAL
-  // ==================================================
-
-  function closeModal() {
-    if (
-      saving ||
-      deleting
-    ) {
-      return;
-    }
-
-    setModal(null);
-    setSelectedRecord(null);
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingRecord(null);
     setFormData({});
-  }
+  };
 
-  // ==================================================
-  // INPUT CHANGE
-  // ==================================================
+  const handleInputChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+    } = event.target;
 
-  function handleInputChange(
-    field,
-    value
-  ) {
     setFormData((previous) => ({
       ...previous,
-      [field]: value,
+      [name]: value,
     }));
-  }
+  };
 
-  // ==================================================
-  // CREATE RECORD
-  // ==================================================
+  // ============================================================
+  // CREATE / UPDATE
+  // ============================================================
 
-  async function createRecord(event) {
+  const saveRecord = async (event) => {
     event.preventDefault();
 
     try {
-      setSaving(true);
+      setLoading(true);
       setError("");
+      setMessage("");
 
-      const payload =
-        cleanPayload(formData);
+      const payload = {};
 
-      const response =
-        await fetch(
-          `${API_URL}/api/records/${objectName}`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body:
-              JSON.stringify(
-                payload
-              ),
+      Object.entries(formData).forEach(
+        ([key, value]) => {
+          if (
+            value !== null &&
+            value !== undefined &&
+            String(value).trim() !== ""
+          ) {
+            payload[key] = value;
           }
-        );
+        }
+      );
+
+      let url;
+      let method;
+
+      if (editingRecord) {
+        url =
+          `${API_BASE}/api/records/` +
+          `${selectedObject}/` +
+          `${editingRecord.Id}`;
+
+        method = "PATCH";
+      } else {
+        url =
+          `${API_BASE}/api/records/` +
+          selectedObject;
+
+        method = "POST";
+      }
+
+      const response = await fetch(
+        url,
+        {
+          method,
+
+          // IMPORTANT
+          credentials: "include",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Accept:
+              "application/json",
+          },
+
+          body: JSON.stringify(
+            payload
+          ),
+        }
+      );
 
       const data =
         await response.json();
 
-      if (!response.ok) {
+      if (response.status === 401) {
+        setAuthenticated(false);
+
         throw new Error(
-          getSalesforceError(data)
+          "Salesforce session expired."
         );
       }
 
-      closeModal();
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Failed to save record."
+        );
+      }
 
-      setSuccessMessage(
-        `${objectName} created successfully.`
+      setMessage(
+        data?.message ||
+          "Record saved successfully."
       );
 
+      closeForm();
+
       await loadRecords(
-        1,
-        false
+        selectedObject,
+        page
       );
     } catch (err) {
       console.error(
-        "Create error:",
+        "Save record error:",
         err
       );
 
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // ==================================================
-  // UPDATE RECORD
-  // ==================================================
-
-  async function updateRecord(event) {
-    event.preventDefault();
-
-    if (!selectedRecord?.Id) {
       setError(
-        "Record ID is missing."
+        err.message ||
+          "Could not save record."
       );
-
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-
-      const payload =
-        cleanPayload(formData);
-
-      const response =
-        await fetch(
-          `${API_URL}/api/records/${objectName}/${selectedRecord.Id}`,
-          {
-            method: "PATCH",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body:
-              JSON.stringify(
-                payload
-              ),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          getSalesforceError(data)
-        );
-      }
-
-      closeModal();
-
-      setSuccessMessage(
-        `${objectName} updated successfully.`
-      );
-
-      await loadRecords(
-        1,
-        false
-      );
-    } catch (err) {
-      console.error(
-        "Update error:",
-        err
-      );
-
-      setError(err.message);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  }
+  };
 
-  // ==================================================
+  // ============================================================
   // DELETE
-  // ==================================================
+  // ============================================================
 
-  async function deleteRecord(record) {
-    if (!record?.Id) {
-      return;
-    }
-
+  const deleteRecord = async (
+    record
+  ) => {
     const confirmed =
       window.confirm(
-        `Are you sure you want to delete this ${objectName} record?`
+        "Are you sure you want to delete this record?"
       );
 
     if (!confirmed) {
@@ -788,807 +504,435 @@ function App() {
     }
 
     try {
-      setDeleting(true);
+      setLoading(true);
       setError("");
+      setMessage("");
 
       const response =
         await fetch(
-          `${API_URL}/api/records/${objectName}/${record.Id}`,
+          `${API_BASE}/api/records/` +
+            `${selectedObject}/` +
+            `${record.Id}`,
           {
             method: "DELETE",
+
+            // IMPORTANT
             credentials: "include",
+
+            headers: {
+              Accept:
+                "application/json",
+            },
           }
         );
 
       const data =
         await response.json();
 
-      if (!response.ok) {
+      if (response.status === 401) {
+        setAuthenticated(false);
+
         throw new Error(
-          getSalesforceError(data)
+          "Salesforce session expired."
         );
       }
 
-      setRecords((previous) =>
-        previous.filter(
-          (item) =>
-            item.Id !== record.Id
-        )
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Failed to delete record."
+        );
+      }
+
+      setMessage(
+        data?.message ||
+          "Record deleted successfully."
       );
 
-      setTotalSize((previous) =>
-        Math.max(
-          0,
-          previous - 1
-        )
-      );
-
-      setSuccessMessage(
-        `${objectName} deleted successfully.`
+      await loadRecords(
+        selectedObject,
+        page
       );
     } catch (err) {
       console.error(
-        "Delete error:",
+        "Delete record error:",
         err
       );
 
-      setError(err.message);
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  // ==================================================
-  // SEARCH
-  // ==================================================
-
-  const filteredRecords =
-    records.filter((record) => {
-      if (!searchTerm.trim()) {
-        return true;
-      }
-
-      const search =
-        searchTerm
-          .toLowerCase()
-          .trim();
-
-      return Object.values(record).some(
-        (value) =>
-          String(value ?? "")
-            .toLowerCase()
-            .includes(search)
+      setError(
+        err.message ||
+          "Could not delete record."
       );
-    });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // ==================================================
+  // ============================================================
+  // PAGINATION
+  // ============================================================
+
+  const goToNextPage = () => {
+    if (!hasMore) {
+      return;
+    }
+
+    const nextPage =
+      page + 1;
+
+    setPage(nextPage);
+
+    loadRecords(
+      selectedObject,
+      nextPage
+    );
+  };
+
+  const goToPreviousPage = () => {
+    if (page <= 1) {
+      return;
+    }
+
+    const previousPage =
+      page - 1;
+
+    setPage(previousPage);
+
+    loadRecords(
+      selectedObject,
+      previousPage
+    );
+  };
+
+  // ============================================================
   // LOADING AUTH
-  // ==================================================
+  // ============================================================
 
   if (checkingAuth) {
     return (
       <div className="app">
-        <div className="center-loading">
-          <div className="spinner"></div>
+        <div className="loading-screen">
+          <h2>
+            Salesforce CRUD Manager
+          </h2>
 
           <p>
-            Connecting to Salesforce...
+            Checking Salesforce login...
           </p>
         </div>
       </div>
     );
   }
 
-  // ==================================================
-  // LOGIN
-  // ==================================================
+  // ============================================================
+  // LOGIN PAGE
+  // ============================================================
 
   if (!authenticated) {
     return (
-      <div className="app login-page">
-        <header className="header">
-          <div className="brand-area">
-            <div className="brand-icon">
-              ☁
-            </div>
-
-            <div>
-              <h1>
-                Salesforce CRUD Manager
-              </h1>
-
-              <p>
-                Smart Salesforce record
-                management
-              </p>
-            </div>
-          </div>
-        </header>
-
-        <main className="main login-main">
-          <section className="login-message">
-            <div className="login-cloud">
-              ☁
-            </div>
-
-            <span className="eyebrow">
-              SALESFORCE CONNECT
-            </span>
-
-            <h2>
-              Welcome back
-            </h2>
-
-            <p>
-              Connect your Salesforce
-              Developer Org and manage
-              Accounts, Opportunities,
-              Leads, Contacts and Cases
-              from one simple dashboard.
-            </p>
-
-            <button
-              className="login-button large"
-              onClick={login}
-            >
-              <span>
-                Login with Salesforce
-              </span>
-
-              <span className="button-arrow">
-                →
-              </span>
-            </button>
-
-            <div className="login-info">
-              <span>🔒</span>
-              Secure OAuth 2.0
-              authentication
-            </div>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  // ==================================================
-  // MAIN APPLICATION
-  // ==================================================
-
-  const fields =
-    FIELD_MAP[objectName];
-
-  const displayedRecords =
-    filteredRecords;
-
-  const remainingRecords =
-    Math.max(
-      0,
-      totalSize - records.length
-    );
-
-  return (
-    <div className="app">
-      {/* HEADER */}
-      <header className="header">
-        <div className="brand-area">
-          <div className="brand-icon">
-            ☁
-          </div>
-
-          <div>
+      <div className="app">
+        <div className="login-container">
+          <div className="login-card">
             <h1>
               Salesforce CRUD Manager
             </h1>
 
-            <p>
-              Your Salesforce data
-              workspace
+            <p className="login-subtitle">
+              Connect your Salesforce
+              account to manage records.
+            </p>
+
+            {error && (
+              <div className="error">
+                {error}
+              </div>
+            )}
+
+            {message && (
+              <div className="success">
+                {message}
+              </div>
+            )}
+
+            <button
+              className="salesforce-login-button"
+              onClick={
+                loginWithSalesforce
+              }
+            >
+              Login with Salesforce
+            </button>
+
+            <p className="login-help">
+              You will be redirected to
+              Salesforce to authorize
+              this application.
             </p>
           </div>
         </div>
+      </div>
+    );
+  }
 
-        <div className="header-actions">
-          <div className="connection-status">
-            <span className="status-dot"></span>
-            Salesforce Connected
-          </div>
+  // ============================================================
+  // MAIN APPLICATION
+  // ============================================================
 
-          <button
-            className="logout-button"
-            onClick={logout}
-          >
-            Logout
-          </button>
+  return (
+    <div className="app">
+      <header className="header">
+        <div>
+          <h1>
+            Salesforce CRUD Manager
+          </h1>
+
+          <p>
+            Manage Salesforce records
+          </p>
         </div>
+
+        <button
+          className="logout-button"
+          onClick={logout}
+        >
+          Logout
+        </button>
       </header>
 
       <main className="main">
-        {/* PAGE INTRO */}
-        <section className="page-intro">
-          <div>
-            <span className="eyebrow">
-              SALESFORCE WORKSPACE
-            </span>
+        {/* OBJECT SELECTOR */}
 
-            <h2>
-              Manage your data
-            </h2>
+        <div className="toolbar">
+          <div className="object-selector">
+            <label>
+              Salesforce Object
+            </label>
 
-            <p>
-              Create, view, edit and
-              delete Salesforce records
-              from one place.
-            </p>
-          </div>
-        </section>
+            <select
+              value={selectedObject}
+              onChange={(event) => {
+                setSelectedObject(
+                  event.target.value
+                );
 
-        {/* DASHBOARD CARDS */}
-        <section className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon blue">
-              ◉
-            </div>
-
-            <div>
-              <span>
-                Current Object
-              </span>
-
-              <strong>
-                {objectName}
-              </strong>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon green">
-              ✓
-            </div>
-
-            <div>
-              <span>
-                Total Records
-              </span>
-
-              <strong>
-                {totalSize.toLocaleString()}
-              </strong>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon purple">
-              ≡
-            </div>
-
-            <div>
-              <span>
-                Loaded
-              </span>
-
-              <strong>
-                {records.length}
-              </strong>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon orange">
-              ↘
-            </div>
-
-            <div>
-              <span>
-                Remaining
-              </span>
-
-              <strong>
-                {remainingRecords.toLocaleString()}
-              </strong>
-            </div>
-          </div>
-        </section>
-
-        {/* TOOLBAR */}
-        <section className="toolbar">
-          <div className="toolbar-left">
-            <div className="object-selector">
-              <label htmlFor="objectSelect">
-                Salesforce Object
-              </label>
-
-              <select
-                id="objectSelect"
-                value={objectName}
-                onChange={(event) =>
-                  setObjectName(
-                    event.target.value
-                  )
-                }
-              >
-                {OBJECTS.map(
-                  (object) => (
-                    <option
-                      key={object}
-                      value={object}
-                    >
-                      {object}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-
-            <div className="search-box">
-              <span className="search-icon">
-                ⌕
-              </span>
-
-              <input
-                type="text"
-                placeholder={`Search ${objectName} records...`}
-                value={searchTerm}
-                onChange={(event) =>
-                  setSearchTerm(
-                    event.target.value
-                  )
-                }
-              />
-
-              {searchTerm && (
-                <button
-                  className="search-clear"
-                  onClick={() =>
-                    setSearchTerm("")
-                  }
-                >
-                  ×
-                </button>
+                setPage(1);
+                setRecords([]);
+                setError("");
+                setMessage("");
+              }}
+            >
+              {OBJECTS.map(
+                (objectName) => (
+                  <option
+                    key={objectName}
+                    value={objectName}
+                  >
+                    {objectName}
+                  </option>
+                )
               )}
-            </div>
+            </select>
           </div>
 
           <button
             className="create-button"
-            onClick={openCreate}
+            onClick={
+              openCreateForm
+            }
           >
-            <span>+</span>
-            Create {objectName}
+            + Create{" "}
+            {selectedObject}
           </button>
-        </section>
+        </div>
 
-        {/* ERROR */}
+        {/* MESSAGES */}
+
         {error && (
-          <div className="error-message">
-            <span className="alert-icon">
-              !
-            </span>
-
-            <div>
-              <strong>
-                Something went wrong
-              </strong>
-
-              <p>{error}</p>
-            </div>
-
-            <button
-              className="error-close"
-              onClick={() =>
-                setError("")
-              }
-            >
-              ×
-            </button>
+          <div className="error">
+            {error}
           </div>
         )}
 
-        {/* SUCCESS */}
-        {successMessage && (
-          <div className="success-message">
-            <span className="success-check">
-              ✓
-            </span>
-
-            <span>
-              {successMessage}
-            </span>
-
-            <button
-              onClick={() =>
-                setSuccessMessage("")
-              }
-            >
-              ×
-            </button>
+        {message && (
+          <div className="success">
+            {message}
           </div>
         )}
 
-        {/* RECORD SECTION */}
-        <section className="records-section">
-          <div className="section-header">
+        {/* RECORDS */}
+
+        <div className="records-card">
+          <div className="records-header">
             <div>
-              <div className="section-title-row">
-                <div className="section-object-icon">
-                  {getInitials(
-                    {},
-                    objectName
-                  )}
-                </div>
+              <h2>
+                {selectedObject}
+              </h2>
 
-                <div>
-                  <h2>
-                    {objectName} Records
-                  </h2>
-
-                  <p>
-                    {searchTerm
-                      ? `${displayedRecords.length} matching records`
-                      : `Showing ${records.length} loaded records`}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="record-count">
-              {displayedRecords.length}
               <span>
-                displayed
+                Total records:{" "}
+                {totalSize}
               </span>
             </div>
+
+            <button
+              className="refresh-button"
+              onClick={() =>
+                loadRecords(
+                  selectedObject,
+                  page
+                )
+              }
+              disabled={loading}
+            >
+              {loading
+                ? "Loading..."
+                : "Refresh"}
+            </button>
           </div>
 
-          {loading ? (
-            <div className="loading">
-              <div className="spinner"></div>
-
-              <p>
-                Loading Salesforce
-                records...
-              </p>
+          {loading &&
+          records.length === 0 ? (
+            <div className="empty-state">
+              Loading Salesforce
+              records...
+            </div>
+          ) : records.length ===
+            0 ? (
+            <div className="empty-state">
+              No records found.
             </div>
           ) : (
-            <>
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th className="actions-header">
-                        Actions
-                      </th>
-
-                      {fields.map(
-                        (field) => (
-                          <th
-                            key={field}
-                          >
-                            {getLabel(
-                              field
-                            )}
-                          </th>
-                        )
-                      )}
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {displayedRecords.length ===
-                    0 ? (
-                      <tr>
-                        <td
-                          colSpan={
-                            fields.length +
-                            1
-                          }
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    {FIELD_CONFIG[
+                      selectedObject
+                    ].map(
+                      (field) => (
+                        <th
+                          key={field}
                         >
-                          <div className="empty-state">
-                            <div className="empty-icon">
-                              {searchTerm
-                                ? "⌕"
-                                : "☁"}
-                            </div>
+                          {field}
+                        </th>
+                      )
+                    )}
 
-                            <h3>
-                              {searchTerm
-                                ? "No matching records"
-                                : "No records found"}
-                            </h3>
+                    <th>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
 
-                            <p>
-                              {searchTerm
-                                ? "Try changing your search."
-                                : `There are no ${objectName} records available.`}
-                            </p>
+                <tbody>
+                  {records.map(
+                    (record) => (
+                      <tr
+                        key={
+                          record.Id
+                        }
+                      >
+                        {FIELD_CONFIG[
+                          selectedObject
+                        ].map(
+                          (field) => (
+                            <td
+                              key={
+                                field
+                              }
+                            >
+                              {record[
+                                field
+                              ] ??
+                                "—"}
+                            </td>
+                          )
+                        )}
+
+                        <td>
+                          <div className="actions">
+                            <button
+                              className="edit-button"
+                              onClick={() =>
+                                openEditForm(
+                                  record
+                                )
+                              }
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              className="delete-button"
+                              onClick={() =>
+                                deleteRecord(
+                                  record
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    ) : (
-                      displayedRecords.map(
-                        (record) => (
-                          <tr
-                            key={
-                              record.Id
-                            }
-                          >
-                            <td className="actions-cell">
-                              <div className="actions">
-                                <button
-                                  className="view-button"
-                                  onClick={() =>
-                                    openView(
-                                      record
-                                    )
-                                  }
-                                  title="View record"
-                                >
-                                  View
-                                </button>
-
-                                <button
-                                  className="edit-button"
-                                  onClick={() =>
-                                    openEdit(
-                                      record
-                                    )
-                                  }
-                                  title="Edit record"
-                                >
-                                  Edit
-                                </button>
-
-                                <button
-                                  className="delete-button"
-                                  onClick={() =>
-                                    deleteRecord(
-                                      record
-                                    )
-                                  }
-                                  disabled={
-                                    deleting
-                                  }
-                                  title="Delete record"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-
-                            {fields.map(
-                              (field) => {
-                                const value =
-                                  record[
-                                    field
-                                  ];
-
-                                const badgeClass =
-                                  getBadgeClass(
-                                    field,
-                                    value
-                                  );
-
-                                return (
-                                  <td
-                                    key={
-                                      field
-                                    }
-                                  >
-                                    {field ===
-                                      "Name" ||
-                                    field ===
-                                      "Subject" ? (
-                                      <div className="record-name">
-                                        <div className="record-avatar">
-                                          {getInitials(
-                                            record,
-                                            objectName
-                                          )}
-                                        </div>
-
-                                        <span>
-                                          {formatValue(
-                                            value
-                                          )}
-                                        </span>
-                                      </div>
-                                    ) : badgeClass ? (
-                                      <span
-                                        className={`status-badge ${badgeClass}`}
-                                      >
-                                        {formatValue(
-                                          value
-                                        )}
-                                      </span>
-                                    ) : (
-                                      formatValue(
-                                        value
-                                      )
-                                    )}
-                                  </td>
-                                );
-                              }
-                            )}
-                          </tr>
-                        )
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div
-                ref={loaderRef}
-                className="scroll-loader"
-              >
-                {loadingMore && (
-                  <div className="loading-more">
-                    <div className="small-spinner"></div>
-                    Loading next 20
-                    records...
-                  </div>
-                )}
-
-                {!loadingMore &&
-                  hasMore && (
-                    <div className="load-hint">
-                      ↓ Scroll down to
-                      load the next 20
-                      records
-                    </div>
+                    )
                   )}
-
-                {!loadingMore &&
-                  !hasMore &&
-                  records.length > 0 && (
-                    <div className="no-more-records">
-                      ✓ All Salesforce
-                      records loaded
-                    </div>
-                  )}
-              </div>
-            </>
+                </tbody>
+              </table>
+            </div>
           )}
-        </section>
-      </main>
 
-      {/* VIEW MODAL */}
-      {modal === "view" && (
-        <div
-          className="form-overlay"
-          onMouseDown={(event) => {
-            if (
-              event.target ===
-              event.currentTarget
-            ) {
-              closeModal();
-            }
-          }}
-        >
-          <div className="form-modal">
-            <div className="modal-header">
-              <div>
-                <span className="eyebrow">
-                  RECORD DETAILS
-                </span>
+          {/* PAGINATION */}
 
-                <h2>
-                  View {objectName}
-                </h2>
-              </div>
+          <div className="pagination">
+            <button
+              onClick={
+                goToPreviousPage
+              }
+              disabled={
+                page <= 1 ||
+                loading
+              }
+            >
+              ← Previous
+            </button>
 
-              <button
-                className="modal-close"
-                onClick={closeModal}
-              >
-                ×
-              </button>
-            </div>
+            <span>
+              Page {page}
+            </span>
 
-            <div className="view-profile">
-              <div className="large-avatar">
-                {getInitials(
-                  selectedRecord,
-                  objectName
-                )}
-              </div>
-
-              <div>
-                <strong>
-                  {formatValue(
-                    selectedRecord?.Name ||
-                      selectedRecord?.Subject ||
-                      selectedRecord?.Company ||
-                      `${selectedRecord?.FirstName || ""} ${selectedRecord?.LastName || ""}`
-                  )}
-                </strong>
-
-                <span>
-                  {objectName}
-                </span>
-              </div>
-            </div>
-
-            <div className="view-record">
-              {fields.map(
-                (field) => (
-                  <div
-                    className="view-row"
-                    key={field}
-                  >
-                    <span>
-                      {getLabel(
-                        field
-                      )}
-                    </span>
-
-                    <strong>
-                      {formatValue(
-                        selectedRecord?.[
-                          field
-                        ]
-                      )}
-                    </strong>
-                  </div>
-                )
-              )}
-            </div>
-
-            <div className="form-buttons">
-              <button
-                className="cancel-button"
-                onClick={closeModal}
-              >
-                Close
-              </button>
-
-              <button
-                className="edit-button modal-edit"
-                onClick={() =>
-                  openEdit(
-                    selectedRecord
-                  )
-                }
-              >
-                Edit Record
-              </button>
-            </div>
+            <button
+              onClick={
+                goToNextPage
+              }
+              disabled={
+                !hasMore ||
+                loading
+              }
+            >
+              Next →
+            </button>
           </div>
         </div>
-      )}
+      </main>
 
       {/* CREATE / EDIT MODAL */}
-      {(modal === "create" ||
-        modal === "edit") && (
-        <div
-          className="form-overlay"
-          onMouseDown={(event) => {
-            if (
-              event.target ===
-              event.currentTarget
-            ) {
-              closeModal();
-            }
-          }}
-        >
-          <div className="form-modal">
-            <div className="modal-header">
-              <div>
-                <span className="eyebrow">
-                  {modal === "create"
-                    ? "NEW RECORD"
-                    : "UPDATE RECORD"}
-                </span>
 
-                <h2>
-                  {modal === "create"
-                    ? `Create ${objectName}`
-                    : `Edit ${objectName}`}
-                </h2>
-              </div>
+      {showForm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>
+                {editingRecord
+                  ? `Edit ${selectedObject}`
+                  : `Create ${selectedObject}`}
+              </h2>
 
               <button
-                className="modal-close"
-                onClick={closeModal}
+                className="close-button"
+                onClick={
+                  closeForm
+                }
               >
                 ×
               </button>
@@ -1596,102 +940,78 @@ function App() {
 
             <form
               onSubmit={
-                modal === "create"
-                  ? createRecord
-                  : updateRecord
+                saveRecord
               }
             >
               <div className="form-grid">
-                {(
-                  CREATE_FIELDS[
-                    objectName
-                  ] || []
-                ).map((field) => {
-                  const inputType =
-                    getInputType(
-                      field
-                    );
-
-                  return (
+                {FIELD_CONFIG[
+                  selectedObject
+                ].map(
+                  (field) => (
                     <div
-                      className={`form-group ${
-                        inputType ===
-                        "textarea"
-                          ? "full-width"
-                          : ""
-                      }`}
+                      className="form-field"
                       key={field}
                     >
                       <label
-                        htmlFor={`field-${field}`}
-                      >
-                        {getLabel(
+                        htmlFor={
                           field
-                        )}
+                        }
+                      >
+                        {field}
                       </label>
 
-                      {inputType ===
-                      "textarea" ? (
+                      {field ===
+                      "Description" ? (
                         <textarea
-                          id={`field-${field}`}
+                          id={field}
+                          name={field}
                           value={
                             formData[
                               field
-                            ] ?? ""
+                            ] || ""
                           }
-                          onChange={(
-                            event
-                          ) =>
-                            handleInputChange(
-                              field,
-                              event.target
-                                .value
-                            )
+                          onChange={
+                            handleInputChange
                           }
-                          rows="4"
-                          placeholder={`Enter ${getLabel(
-                            field
-                          ).toLowerCase()}`}
+                          rows="5"
                         />
                       ) : (
                         <input
-                          id={`field-${field}`}
+                          id={field}
+                          name={field}
                           type={
-                            inputType
+                            field ===
+                            "Amount"
+                              ? "number"
+                              : field ===
+                                "CloseDate"
+                              ? "date"
+                              : "text"
                           }
                           value={
                             formData[
                               field
-                            ] ?? ""
+                            ] || ""
                           }
-                          onChange={(
-                            event
-                          ) =>
-                            handleInputChange(
-                              field,
-                              event.target
-                                .value
-                            )
+                          onChange={
+                            handleInputChange
                           }
-                          placeholder={`Enter ${getLabel(
-                            field
-                          ).toLowerCase()}`}
                         />
                       )}
                     </div>
-                  );
-                })}
+                  )
+                )}
               </div>
 
-              <div className="form-buttons">
+              <div className="modal-actions">
                 <button
                   type="button"
                   className="cancel-button"
                   onClick={
-                    closeModal
+                    closeForm
                   }
                   disabled={
-                    saving
+                    loading
                   }
                 >
                   Cancel
@@ -1699,25 +1019,16 @@ function App() {
 
                 <button
                   type="submit"
-                  className="create-button"
+                  className="save-button"
                   disabled={
-                    saving
+                    loading
                   }
                 >
-                  {saving ? (
-                    <>
-                      <div className="button-spinner"></div>
-                      Saving...
-                    </>
-                  ) : modal ===
-                    "create" ? (
-                    <>
-                      Create{" "}
-                      {objectName}
-                    </>
-                  ) : (
-                    "Save Changes"
-                  )}
+                  {loading
+                    ? "Saving..."
+                    : editingRecord
+                    ? "Update"
+                    : "Create"}
                 </button>
               </div>
             </form>
@@ -1725,71 +1036,6 @@ function App() {
         </div>
       )}
     </div>
-  );
-}
-
-// ==================================================
-// HELPERS
-// ==================================================
-
-function cleanPayload(data) {
-  const result = {};
-
-  Object.entries(data).forEach(
-    ([key, value]) => {
-      if (
-        value !== null &&
-        value !== undefined &&
-        value !== ""
-      ) {
-        result[key] = value;
-      }
-    }
-  );
-
-  return result;
-}
-
-function getSalesforceError(data) {
-  if (!data) {
-    return "Salesforce request failed.";
-  }
-
-  if (
-    Array.isArray(data.details)
-  ) {
-    return data.details
-      .map((item) => {
-        if (
-          typeof item === "string"
-        ) {
-          return item;
-        }
-
-        return (
-          item.message ||
-          item.errorCode ||
-          JSON.stringify(item)
-        );
-      })
-      .join(" | ");
-  }
-
-  if (
-    data.details?.message
-  ) {
-    return data.details.message;
-  }
-
-  if (
-    data.details?.[0]?.message
-  ) {
-    return data.details[0].message;
-  }
-
-  return (
-    data.error ||
-    "Salesforce request failed."
   );
 }
 
