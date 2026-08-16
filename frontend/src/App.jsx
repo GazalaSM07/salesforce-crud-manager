@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const API_URL = import.meta.env.VITE_API_URL || "";
+
 const OBJECTS = [
   "Account",
   "Opportunity",
@@ -333,7 +335,7 @@ function App() {
       setCheckingAuth(true);
 
       const response = await fetch(
-        "/auth/status",
+        `${API_URL}/auth/status`,
         {
           credentials: "include",
         }
@@ -380,7 +382,7 @@ function App() {
         setError("");
 
         const response = await fetch(
-          `/api/records/${objectName}?page=${requestedPage}`,
+          `${API_URL}/api/records/${objectName}?page=${requestedPage}`,
           {
             credentials: "include",
           }
@@ -527,7 +529,7 @@ function App() {
 
   function login() {
     window.location.href =
-      "/auth/login";
+      `${API_URL}/auth/login`;
   }
 
   // ==================================================
@@ -537,7 +539,7 @@ function App() {
   async function logout() {
     try {
       await fetch(
-        "/auth/logout",
+        `${API_URL}/auth/logout`,
         {
           credentials: "include",
         }
@@ -651,7 +653,7 @@ function App() {
 
       const response =
         await fetch(
-          `/api/records/${objectName}`,
+          `${API_URL}/api/records/${objectName}`,
           {
             method: "POST",
             credentials: "include",
@@ -721,7 +723,7 @@ function App() {
 
       const response =
         await fetch(
-          `/api/records/${objectName}/${selectedRecord.Id}`,
+          `${API_URL}/api/records/${objectName}/${selectedRecord.Id}`,
           {
             method: "PATCH",
             credentials: "include",
@@ -791,7 +793,7 @@ function App() {
 
       const response =
         await fetch(
-          `/api/records/${objectName}/${record.Id}`,
+          `${API_URL}/api/records/${objectName}/${record.Id}`,
           {
             method: "DELETE",
             credentials: "include",
