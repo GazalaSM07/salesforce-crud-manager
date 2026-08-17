@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-<h1>
-  Welcome back 👋 TESTING
-</h1>
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://salesforce-crud-backend-rffk.onrender.com";
@@ -14,6 +17,8 @@ const OBJECTS = [
   "Case",
 ];
 
+const PAGE_SIZE = 20;
+
 const OBJECT_META = {
   Account: {
     label: "Accounts",
@@ -21,24 +26,28 @@ const OBJECT_META = {
     color: "blue",
     description: "Manage customer accounts",
   },
+
   Opportunity: {
     label: "Opportunities",
     icon: "◆",
     color: "purple",
     description: "Track your sales pipeline",
   },
+
   Lead: {
     label: "Leads",
     icon: "◉",
     color: "orange",
     description: "Manage potential customers",
   },
+
   Contact: {
     label: "Contacts",
     icon: "◎",
     color: "green",
     description: "Manage customer contacts",
   },
+
   Case: {
     label: "Cases",
     icon: "●",
@@ -48,7 +57,14 @@ const OBJECT_META = {
 };
 
 const FIELD_MAP = {
-  Account: ["Id", "Name", "Phone", "Website", "Industry", "Type"],
+  Account: [
+    "Id",
+    "Name",
+    "Phone",
+    "Website",
+    "Industry",
+    "Type",
+  ],
 
   Opportunity: [
     "Id",
@@ -88,7 +104,13 @@ const FIELD_MAP = {
 };
 
 const CREATE_FIELDS = {
-  Account: ["Name", "Phone", "Website", "Industry", "Type"],
+  Account: [
+    "Name",
+    "Phone",
+    "Website",
+    "Industry",
+    "Type",
+  ],
 
   Opportunity: [
     "Name",
@@ -98,7 +120,13 @@ const CREATE_FIELDS = {
     "Type",
   ],
 
-  Lead: ["FirstName", "LastName", "Company", "Email", "Phone"],
+  Lead: [
+    "FirstName",
+    "LastName",
+    "Company",
+    "Email",
+    "Phone",
+  ],
 
   Contact: [
     "FirstName",
@@ -144,7 +172,11 @@ function getLabel(field) {
 }
 
 function formatValue(value) {
-  if (value === null || value === undefined || value === "") {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
     return "—";
   }
 
@@ -164,21 +196,34 @@ function getInputType(field) {
 function getInitials(record, objectName) {
   if (objectName === "Account") {
     return (
-      record?.Name?.substring(0, 2).toUpperCase() || "AC"
+      record?.Name
+        ?.substring(0, 2)
+        .toUpperCase() || "AC"
     );
   }
 
   if (objectName === "Opportunity") {
     return (
-      record?.Name?.substring(0, 2).toUpperCase() || "OP"
+      record?.Name
+        ?.substring(0, 2)
+        .toUpperCase() || "OP"
     );
   }
 
-  if (objectName === "Lead" || objectName === "Contact") {
-    const first = record?.FirstName?.[0] || "";
-    const last = record?.LastName?.[0] || "";
+  if (
+    objectName === "Lead" ||
+    objectName === "Contact"
+  ) {
+    const first =
+      record?.FirstName?.[0] || "";
 
-    return `${first}${last}`.toUpperCase() || "US";
+    const last =
+      record?.LastName?.[0] || "";
+
+    return (
+      `${first}${last}`.toUpperCase() ||
+      "US"
+    );
   }
 
   if (objectName === "Case") {
@@ -191,9 +236,13 @@ function getInitials(record, objectName) {
 function getBadgeClass(field, value) {
   if (!value) return "";
 
-  const normalized = String(value).toLowerCase();
+  const normalized =
+    String(value).toLowerCase();
 
-  if (field === "StageName" || field === "Status") {
+  if (
+    field === "StageName" ||
+    field === "Status"
+  ) {
     if (
       normalized.includes("closed") ||
       normalized.includes("won") ||
@@ -230,11 +279,15 @@ function getBadgeClass(field, value) {
       return "badge-danger";
     }
 
-    if (normalized.includes("medium")) {
+    if (
+      normalized.includes("medium")
+    ) {
       return "badge-warning";
     }
 
-    if (normalized.includes("low")) {
+    if (
+      normalized.includes("low")
+    ) {
       return "badge-success";
     }
   }
@@ -245,15 +298,17 @@ function getBadgeClass(field, value) {
 function cleanPayload(data) {
   const result = {};
 
-  Object.entries(data).forEach(([key, value]) => {
-    if (
-      value !== null &&
-      value !== undefined &&
-      value !== ""
-    ) {
-      result[key] = value;
+  Object.entries(data).forEach(
+    ([key, value]) => {
+      if (
+        value !== null &&
+        value !== undefined &&
+        value !== ""
+      ) {
+        result[key] = value;
+      }
     }
-  });
+  );
 
   return result;
 }
@@ -266,7 +321,9 @@ function getSalesforceError(data) {
   if (Array.isArray(data.details)) {
     return data.details
       .map((item) => {
-        if (typeof item === "string") return item;
+        if (typeof item === "string") {
+          return item;
+        }
 
         return (
           item.message ||
@@ -285,258 +342,570 @@ function getSalesforceError(data) {
     return data.details[0].message;
   }
 
-  return data.error || "Salesforce request failed.";
+  return (
+    data.error ||
+    "Salesforce request failed."
+  );
 }
 
 function App() {
-  const [authenticated, setAuthenticated] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [authenticated, setAuthenticated] =
+    useState(false);
 
-  const [objectName, setObjectName] = useState("Account");
+  const [checkingAuth, setCheckingAuth] =
+    useState(true);
 
-  const [records, setRecords] = useState([]);
-  const [totalSize, setTotalSize] = useState(0);
+  const [objectName, setObjectName] =
+    useState("Account");
 
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  /*
+   * PAGINATION
+   *
+   * page = currently loaded Salesforce page.
+   *
+   * Example:
+   * page 1 = records 1-20
+   * page 2 = records 21-40
+   * page 3 = records 41-60
+   */
 
-  const [objectCounts, setObjectCounts] = useState({
-    Account: null,
-    Opportunity: null,
-    Lead: null,
-    Contact: null,
-    Case: null,
-  });
+  const [records, setRecords] =
+    useState([]);
 
-  const [loadingCounts, setLoadingCounts] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalSize, setTotalSize] =
+    useState(0);
 
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [page, setPage] =
+    useState(0);
 
-  const [modal, setModal] = useState(null);
-  const [selectedRecord, setSelectedRecord] = useState(null);
-  const [formData, setFormData] = useState({});
+  const [hasMore, setHasMore] =
+    useState(false);
 
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [loadingMore, setLoadingMore] =
+    useState(false);
 
-  const loaderRef = useRef(null);
+  /*
+   * Prevent multiple simultaneous
+   * pagination requests.
+   */
+  const loadingMoreRef =
+    useRef(false);
 
-  const currentMeta = OBJECT_META[objectName];
-  const fields = FIELD_MAP[objectName];
+  const [objectCounts, setObjectCounts] =
+    useState({
+      Account: null,
+      Opportunity: null,
+      Lead: null,
+      Contact: null,
+      Case: null,
+    });
+
+  const [loadingCounts, setLoadingCounts] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [successMessage, setSuccessMessage] =
+    useState("");
+
+  const [modal, setModal] =
+    useState(null);
+
+  const [selectedRecord, setSelectedRecord] =
+    useState(null);
+
+  const [formData, setFormData] =
+    useState({});
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [deleting, setDeleting] =
+    useState(false);
+
+  const [searchTerm, setSearchTerm] =
+    useState("");
+
+  /*
+   * IMPORTANT:
+   *
+   * This is the actual element that scrolls.
+   *
+   * The IntersectionObserver will use this
+   * element as its root.
+   */
+  const tableWrapperRef =
+    useRef(null);
+
+  const loaderRef =
+    useRef(null);
+
+  const currentMeta =
+    OBJECT_META[objectName];
+
+  const fields =
+    FIELD_MAP[objectName];
 
   useEffect(() => {
-    if (!successMessage) return;
+    if (!successMessage) {
+      return;
+    }
 
-    const timer = setTimeout(() => {
-      setSuccessMessage("");
-    }, 4000);
+    const timer =
+      setTimeout(() => {
+        setSuccessMessage("");
+      }, 4000);
 
-    return () => clearTimeout(timer);
+    return () =>
+      clearTimeout(timer);
   }, [successMessage]);
 
-  const checkAuth = useCallback(async () => {
-    try {
-      setCheckingAuth(true);
+  /*
+   * ==========================================
+   * AUTH CHECK
+   * ==========================================
+   */
 
-      const response = await fetch(
-        `${API_URL}/auth/status`,
-        {
-          credentials: "include",
-        }
-      );
+  const checkAuth =
+    useCallback(async () => {
+      try {
+        setCheckingAuth(true);
 
-      const data = await response.json();
+        const response =
+          await fetch(
+            `${API_URL}/auth/status`,
+            {
+              credentials: "include",
+            }
+          );
 
-      setAuthenticated(Boolean(data.authenticated));
-    } catch (err) {
-      console.error(err);
-      setAuthenticated(false);
-    } finally {
-      setCheckingAuth(false);
-    }
-  }, []);
+        const data =
+          await response.json();
+
+        setAuthenticated(
+          Boolean(data.authenticated)
+        );
+      } catch (err) {
+        console.error(err);
+
+        setAuthenticated(false);
+      } finally {
+        setCheckingAuth(false);
+      }
+    }, []);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  const loadObjectCounts = useCallback(async () => {
-    try {
-      setLoadingCounts(true);
+  /*
+   * ==========================================
+   * OBJECT COUNTS
+   * ==========================================
+   */
 
-      const results = await Promise.all(
-        OBJECTS.map(async (object) => {
-          try {
-            const response = await fetch(
-              `${API_URL}/api/records/${object}?page=1`,
+  const loadObjectCounts =
+    useCallback(async () => {
+      try {
+        setLoadingCounts(true);
+
+        const results =
+          await Promise.all(
+            OBJECTS.map(
+              async (object) => {
+                try {
+                  const response =
+                    await fetch(
+                      `${API_URL}/api/records/${object}?page=1`,
+                      {
+                        credentials:
+                          "include",
+                      }
+                    );
+
+                  const data =
+                    await response.json();
+
+                  if (!response.ok) {
+                    return [
+                      object,
+                      null,
+                    ];
+                  }
+
+                  return [
+                    object,
+                    Number(
+                      data.totalSize ||
+                        0
+                    ),
+                  ];
+                } catch {
+                  return [
+                    object,
+                    null,
+                  ];
+                }
+              }
+            )
+          );
+
+        const counts = {};
+
+        results.forEach(
+          ([object, count]) => {
+            counts[object] = count;
+          }
+        );
+
+        setObjectCounts(counts);
+      } catch (err) {
+        console.error(
+          "Count loading error:",
+          err
+        );
+      } finally {
+        setLoadingCounts(false);
+      }
+    }, []);
+
+  useEffect(() => {
+    if (!authenticated) {
+      return;
+    }
+
+    loadObjectCounts();
+  }, [
+    authenticated,
+    loadObjectCounts,
+  ]);
+
+  /*
+   * ==========================================
+   * LOAD RECORDS
+   * ==========================================
+   *
+   * requestedPage:
+   *
+   * 1 -> first 20
+   * 2 -> next 20
+   * 3 -> next 20
+   *
+   * append:
+   *
+   * false -> replace records
+   * true  -> append records
+   */
+
+  const loadRecords =
+    useCallback(
+      async (
+        requestedPage = 1,
+        append = false
+      ) => {
+        /*
+         * Do not allow two "load more"
+         * requests at the same time.
+         */
+        if (
+          append &&
+          loadingMoreRef.current
+        ) {
+          return;
+        }
+
+        try {
+          if (append) {
+            loadingMoreRef.current =
+              true;
+
+            setLoadingMore(true);
+          } else {
+            setLoading(true);
+          }
+
+          setError("");
+
+          console.log(
+            `[Pagination] Loading ${objectName} page ${requestedPage}`
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/api/records/${objectName}?page=${requestedPage}`,
               {
-                credentials: "include",
+                credentials:
+                  "include",
               }
             );
 
-            const data = await response.json();
+          const data =
+            await response.json();
 
-            if (!response.ok) {
-              return [object, null];
-            }
-
-            return [
-              object,
-              Number(data.totalSize || 0),
-            ];
-          } catch {
-            return [object, null];
+          if (!response.ok) {
+            throw new Error(
+              getSalesforceError(data)
+            );
           }
-        })
-      );
 
-      const counts = {};
+          const incomingRecords =
+            data.records || [];
 
-      results.forEach(([object, count]) => {
-        counts[object] = count;
-      });
-
-      setObjectCounts(counts);
-    } finally {
-      setLoadingCounts(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!authenticated) return;
-
-    loadObjectCounts();
-  }, [authenticated, loadObjectCounts]);
-
-  const loadRecords = useCallback(
-    async (requestedPage = 1, append = false) => {
-      try {
-        if (append) {
-          setLoadingMore(true);
-        } else {
-          setLoading(true);
-        }
-
-        setError("");
-
-        const response = await fetch(
-          `${API_URL}/api/records/${objectName}?page=${requestedPage}`,
-          {
-            credentials: "include",
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.error || "Failed to load records."
+          console.log(
+            `[Pagination] Received ${incomingRecords.length} records`
           );
-        }
 
-        const incomingRecords = data.records || [];
+          console.log(
+            `[Pagination] Total Salesforce records: ${data.totalSize}`
+          );
 
-        if (append) {
-          setRecords((previous) => [
-            ...previous,
-            ...incomingRecords,
-          ]);
-        } else {
-          setRecords(incomingRecords);
-        }
+          console.log(
+            `[Pagination] Has more: ${data.hasMore}`
+          );
 
-        setTotalSize(Number(data.totalSize || 0));
+          if (append) {
+            setRecords(
+              (previous) => {
+                /*
+                 * Protect against accidental
+                 * duplicate records.
+                 */
+                const existingIds =
+                  new Set(
+                    previous.map(
+                      (item) =>
+                        item.Id
+                    )
+                  );
 
-        setPage(
-          Number(data.page || requestedPage)
-        );
+                const newRecords =
+                  incomingRecords.filter(
+                    (item) =>
+                      !existingIds.has(
+                        item.Id
+                      )
+                  );
 
-        setHasMore(Boolean(data.hasMore));
+                return [
+                  ...previous,
+                  ...newRecords,
+                ];
+              }
+            );
+          } else {
+            setRecords(
+              incomingRecords
+            );
+          }
 
-        setObjectCounts((previous) => ({
-          ...previous,
-          [objectName]: Number(
-            data.totalSize || 0
-          ),
-        }));
-      } catch (err) {
-        console.error(err);
+          setTotalSize(
+            Number(
+              data.totalSize || 0
+            )
+          );
 
-        if (
-          err.message
-            .toLowerCase()
-            .includes("not authenticated")
-        ) {
-          setAuthenticated(false);
-        }
+          setPage(
+            Number(
+              data.page ||
+                requestedPage
+            )
+          );
 
-        setError(err.message);
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [objectName]
-  );
+          setHasMore(
+            Boolean(data.hasMore)
+          );
 
-  useEffect(() => {
-    if (!authenticated) return;
+          setObjectCounts(
+            (previous) => ({
+              ...previous,
 
-    setRecords([]);
-    setPage(0);
-    setHasMore(false);
-    setSearchTerm("");
+              [objectName]:
+                Number(
+                  data.totalSize ||
+                    0
+                ),
+            })
+          );
+        } catch (err) {
+          console.error(
+            "Load records error:",
+            err
+          );
 
-    loadRecords(1, false);
-  }, [authenticated, objectName, loadRecords]);
+          if (
+            err.message
+              .toLowerCase()
+              .includes(
+                "not authenticated"
+              )
+          ) {
+            setAuthenticated(
+              false
+            );
+          }
 
-  useEffect(() => {
-    const element = loaderRef.current;
+          setError(
+            err.message
+          );
+        } finally {
+          setLoading(false);
 
-    if (!element || !hasMore) return;
+          setLoadingMore(false);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-
-        if (
-          entry.isIntersecting &&
-          !loadingMore &&
-          !loading
-        ) {
-          loadRecords(page + 1, true);
+          loadingMoreRef.current =
+            false;
         }
       },
-      {
-        rootMargin: "300px",
-        threshold: 0,
-      }
+      [objectName]
     );
 
-    observer.observe(element);
+  /*
+   * ==========================================
+   * RESET WHEN OBJECT CHANGES
+   * ==========================================
+   */
 
-    return () => observer.disconnect();
+  useEffect(() => {
+    if (!authenticated) {
+      return;
+    }
+
+    setRecords([]);
+
+    setPage(0);
+
+    setHasMore(false);
+
+    setTotalSize(0);
+
+    setSearchTerm("");
+
+    /*
+     * Reset scroll position.
+     */
+    if (
+      tableWrapperRef.current
+    ) {
+      tableWrapperRef.current.scrollTop = 0;
+    }
+
+    loadRecords(1, false);
+  }, [
+    authenticated,
+    objectName,
+    loadRecords,
+  ]);
+
+  /*
+   * ==========================================
+   * INFINITE SCROLL
+   * ==========================================
+   *
+   * THIS IS THE IMPORTANT FIX.
+   *
+   * The observer root is the table
+   * scroll container.
+   *
+   * Previously the observer watched the
+   * browser/page instead of the table.
+   */
+
+  useEffect(() => {
+    const scrollContainer =
+      tableWrapperRef.current;
+
+    const loader =
+      loaderRef.current;
+
+    if (!scrollContainer || !loader) {
+      return;
+    }
+
+    if (!hasMore) {
+      return;
+    }
+
+    const observer =
+      new IntersectionObserver(
+        (entries) => {
+          const entry =
+            entries[0];
+
+          if (
+            entry.isIntersecting &&
+            hasMore &&
+            !loading &&
+            !loadingMoreRef.current
+          ) {
+            console.log(
+              `[Infinite Scroll] Loading page ${
+                page + 1
+              }`
+            );
+
+            loadRecords(
+              page + 1,
+              true
+            );
+          }
+        },
+        {
+          /*
+           * VERY IMPORTANT
+           *
+           * Observe relative to the
+           * scrolling table container.
+           */
+          root: scrollContainer,
+
+          /*
+           * Start loading slightly before
+           * the user reaches the absolute
+           * bottom.
+           */
+          rootMargin:
+            "0px 0px 250px 0px",
+
+          threshold: 0,
+        }
+      );
+
+    observer.observe(loader);
+
+    return () =>
+      observer.disconnect();
   }, [
     hasMore,
-    loadingMore,
     loading,
     page,
     loadRecords,
   ]);
 
+  /*
+   * ==========================================
+   * LOGIN
+   * ==========================================
+   */
+
   function login() {
-    const frontendUrl = window.location.origin;
+    const frontendUrl =
+      window.location.origin;
 
     window.location.href =
       `${API_URL}/auth/login?frontend=${encodeURIComponent(
         frontendUrl
       )}`;
   }
+
+  /*
+   * ==========================================
+   * LOGOUT
+   * ==========================================
+   */
 
   async function logout() {
     try {
@@ -551,103 +920,237 @@ function App() {
     }
 
     setAuthenticated(false);
+
     setRecords([]);
   }
 
+  /*
+   * ==========================================
+   * OBJECT CHANGE
+   * ==========================================
+   */
+
   function changeObject(event) {
-    setObjectName(event.target.value);
+    setObjectName(
+      event.target.value
+    );
+
     setError("");
+
     setSearchTerm("");
   }
 
-  function refreshRecords() {
-    loadRecords(1, false);
-    loadObjectCounts();
+  /*
+   * ==========================================
+   * REFRESH
+   * ==========================================
+   */
+
+  async function refreshRecords() {
+    setRecords([]);
+
+    setPage(0);
+
+    setHasMore(false);
+
+    setTotalSize(0);
+
+    setSearchTerm("");
+
+    if (
+      tableWrapperRef.current
+    ) {
+      tableWrapperRef.current.scrollTop = 0;
+    }
+
+    await loadRecords(1, false);
+
+    await loadObjectCounts();
 
     setSuccessMessage(
       `${currentMeta.label} refreshed successfully.`
     );
   }
 
+  /*
+   * ==========================================
+   * CREATE
+   * ==========================================
+   */
+
   function openCreate() {
     const fieldsToCreate =
-      CREATE_FIELDS[objectName] || [];
+      CREATE_FIELDS[
+        objectName
+      ] || [];
 
     const initialData = {};
 
-    fieldsToCreate.forEach((field) => {
-      initialData[field] = "";
-    });
+    fieldsToCreate.forEach(
+      (field) => {
+        initialData[field] = "";
+      }
+    );
 
     setFormData(initialData);
+
     setSelectedRecord(null);
+
     setModal("create");
+
     setError("");
   }
+
+  /*
+   * ==========================================
+   * VIEW
+   * ==========================================
+   */
 
   function openView(record) {
     setSelectedRecord(record);
+
     setModal("view");
+
     setError("");
   }
+
+  /*
+   * ==========================================
+   * EDIT
+   * ==========================================
+   */
 
   function openEdit(record) {
     const fieldsToEdit =
-      CREATE_FIELDS[objectName] || [];
+      CREATE_FIELDS[
+        objectName
+      ] || [];
 
     const initialData = {};
 
-    fieldsToEdit.forEach((field) => {
-      initialData[field] = record[field] ?? "";
-    });
+    fieldsToEdit.forEach(
+      (field) => {
+        initialData[field] =
+          record[field] ?? "";
+      }
+    );
 
     setSelectedRecord(record);
+
     setFormData(initialData);
+
     setModal("edit");
+
     setError("");
   }
 
+  /*
+   * ==========================================
+   * CLOSE MODAL
+   * ==========================================
+   */
+
   function closeModal() {
-    if (saving || deleting) return;
+    if (
+      saving ||
+      deleting
+    ) {
+      return;
+    }
 
     setModal(null);
+
     setSelectedRecord(null);
+
     setFormData({});
   }
 
-  function handleInputChange(field, value) {
-    setFormData((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
+  /*
+   * ==========================================
+   * INPUT CHANGE
+   * ==========================================
+   */
+
+  function handleInputChange(
+    field,
+    value
+  ) {
+    /*
+     * PHONE FIX
+     *
+     * Only allow numbers.
+     *
+     * Example:
+     *
+     * 987abc123
+     *
+     * becomes:
+     *
+     * 987123
+     */
+    if (field === "Phone") {
+      value =
+        value.replace(
+          /\D/g,
+          ""
+        );
+    }
+
+    setFormData(
+      (previous) => ({
+        ...previous,
+        [field]: value,
+      })
+    );
   }
 
-  async function createRecord(event) {
+  /*
+   * ==========================================
+   * CREATE RECORD
+   * ==========================================
+   */
+
+  async function createRecord(
+    event
+  ) {
     event.preventDefault();
 
     try {
       setSaving(true);
+
       setError("");
 
-      const response = await fetch(
-        `${API_URL}/api/records/${objectName}`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(
-            cleanPayload(formData)
-          ),
-        }
-      );
+      const response =
+        await fetch(
+          `${API_URL}/api/records/${objectName}`,
+          {
+            method: "POST",
 
-      const data = await response.json();
+            credentials:
+              "include",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify(
+              cleanPayload(
+                formData
+              )
+            ),
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          getSalesforceError(data)
+          getSalesforceError(
+            data
+          )
         );
       }
 
@@ -657,7 +1160,24 @@ function App() {
         `${objectName} created successfully.`
       );
 
-      await loadRecords(1, false);
+      /*
+       * New record can change the
+       * first page because records are
+       * sorted by CreatedDate DESC.
+       *
+       * Therefore reset to page 1.
+       */
+      setRecords([]);
+
+      setPage(0);
+
+      setHasMore(false);
+
+      await loadRecords(
+        1,
+        false
+      );
+
       await loadObjectCounts();
     } catch (err) {
       setError(err.message);
@@ -666,37 +1186,60 @@ function App() {
     }
   }
 
-  async function updateRecord(event) {
+  /*
+   * ==========================================
+   * UPDATE RECORD
+   * ==========================================
+   */
+
+  async function updateRecord(
+    event
+  ) {
     event.preventDefault();
 
     if (!selectedRecord?.Id) {
-      setError("Record ID is missing.");
+      setError(
+        "Record ID is missing."
+      );
+
       return;
     }
 
     try {
       setSaving(true);
+
       setError("");
 
-      const response = await fetch(
-        `${API_URL}/api/records/${objectName}/${selectedRecord.Id}`,
-        {
-          method: "PATCH",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(
-            cleanPayload(formData)
-          ),
-        }
-      );
+      const response =
+        await fetch(
+          `${API_URL}/api/records/${objectName}/${selectedRecord.Id}`,
+          {
+            method: "PATCH",
 
-      const data = await response.json();
+            credentials:
+              "include",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify(
+              cleanPayload(
+                formData
+              )
+            ),
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          getSalesforceError(data)
+          getSalesforceError(
+            data
+          )
         );
       }
 
@@ -706,7 +1249,21 @@ function App() {
         `${objectName} updated successfully.`
       );
 
-      await loadRecords(1, false);
+      /*
+       * Reload currently from page 1
+       * to keep sorting consistent.
+       */
+      setRecords([]);
+
+      setPage(0);
+
+      setHasMore(false);
+
+      await loadRecords(
+        1,
+        false
+      );
+
       await loadObjectCounts();
     } catch (err) {
       setError(err.message);
@@ -715,55 +1272,91 @@ function App() {
     }
   }
 
-  async function deleteRecord(record) {
-    if (!record?.Id) return;
+  /*
+   * ==========================================
+   * DELETE RECORD
+   * ==========================================
+   */
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete this ${objectName} record?`
-    );
+  async function deleteRecord(
+    record
+  ) {
+    if (!record?.Id) {
+      return;
+    }
 
-    if (!confirmed) return;
+    const confirmed =
+      window.confirm(
+        `Are you sure you want to delete this ${objectName} record?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
 
     try {
       setDeleting(true);
+
       setError("");
 
-      const response = await fetch(
-        `${API_URL}/api/records/${objectName}/${record.Id}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
-      );
+      const response =
+        await fetch(
+          `${API_URL}/api/records/${objectName}/${record.Id}`,
+          {
+            method: "DELETE",
 
-      const data = await response.json();
+            credentials:
+              "include",
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          getSalesforceError(data)
+          getSalesforceError(
+            data
+          )
         );
       }
 
-      setRecords((previous) =>
-        previous.filter(
-          (item) => item.Id !== record.Id
-        )
+      setRecords(
+        (previous) =>
+          previous.filter(
+            (item) =>
+              item.Id !==
+              record.Id
+          )
       );
 
-      setTotalSize((previous) =>
-        Math.max(0, previous - 1)
+      setTotalSize(
+        (previous) =>
+          Math.max(
+            0,
+            previous - 1
+          )
       );
 
-      setObjectCounts((previous) => ({
-        ...previous,
-        [objectName]:
-          previous[objectName] !== null
-            ? Math.max(
-                0,
-                previous[objectName] - 1
-              )
-            : previous[objectName],
-      }));
+      setObjectCounts(
+        (previous) => ({
+          ...previous,
+
+          [objectName]:
+            previous[
+              objectName
+            ] !== null
+              ? Math.max(
+                  0,
+                  previous[
+                    objectName
+                  ] - 1
+                )
+              : previous[
+                  objectName
+                ],
+        })
+      );
 
       setSuccessMessage(
         `${objectName} deleted successfully.`
@@ -775,50 +1368,85 @@ function App() {
     }
   }
 
-  const filteredRecords = records.filter(
-    (record) => {
-      if (!searchTerm.trim()) return true;
+  /*
+   * ==========================================
+   * SEARCH
+   * ==========================================
+   */
 
-      const search = searchTerm
-        .toLowerCase()
-        .trim();
+  const filteredRecords =
+    records.filter(
+      (record) => {
+        if (
+          !searchTerm.trim()
+        ) {
+          return true;
+        }
 
-      return Object.values(record).some(
-        (value) =>
-          String(value ?? "")
+        const search =
+          searchTerm
+            .toLowerCase()
+            .trim();
+
+        return Object.values(
+          record
+        ).some((value) =>
+          String(
+            value ?? ""
+          )
             .toLowerCase()
             .includes(search)
-      );
-    }
-  );
+        );
+      }
+    );
+
+  /*
+   * ==========================================
+   * LOADING SCREEN
+   * ==========================================
+   */
 
   if (checkingAuth) {
     return (
       <div className="loading-screen">
         <div className="loading-card">
-          <div className="loading-cloud">☁</div>
+          <div className="loading-cloud">
+            ☁
+          </div>
 
           <div className="spinner"></div>
 
-          <h2>Connecting to Salesforce</h2>
+          <h2>
+            Connecting to Salesforce
+          </h2>
 
           <p>
-            Checking your secure Salesforce session...
+            Checking your secure
+            Salesforce session...
           </p>
         </div>
       </div>
     );
   }
 
+  /*
+   * ==========================================
+   * LOGIN SCREEN
+   * ==========================================
+   */
+
   if (!authenticated) {
     return (
       <div className="login-page">
         <div className="login-glow glow-one"></div>
+
         <div className="login-glow glow-two"></div>
 
         <header className="login-header">
           <div className="brand">
-            <div className="brand-icon">☁</div>
+            <div className="brand-icon">
+              ☁
+            </div>
 
             <div>
               <strong>
@@ -845,47 +1473,64 @@ function App() {
 
             <h1>
               Manage Salesforce
-              <span> records smarter.</span>
+              <span>
+                {" "}
+                records smarter.
+              </span>
             </h1>
 
             <p>
-              Create, view, update and delete
-              Salesforce records through one
-              simple and professional workspace.
+              Create, view, update and
+              delete Salesforce records
+              through one simple and
+              professional workspace.
             </p>
 
             <div className="login-features">
-              {OBJECTS.map((object) => {
-                const meta = OBJECT_META[object];
+              {OBJECTS.map(
+                (object) => {
+                  const meta =
+                    OBJECT_META[
+                      object
+                    ];
 
-                return (
-                  <div
-                    className="login-feature"
-                    key={object}
-                  >
+                  return (
                     <div
-                      className={`feature-icon ${meta.color}`}
+                      className="login-feature"
+                      key={
+                        object
+                      }
                     >
-                      {meta.icon}
-                    </div>
+                      <div
+                        className={`feature-icon ${meta.color}`}
+                      >
+                        {meta.icon}
+                      </div>
 
-                    <div>
-                      <strong>
-                        {meta.label}
-                      </strong>
+                      <div>
+                        <strong>
+                          {
+                            meta.label
+                          }
+                        </strong>
 
-                      <span>
-                        {meta.description}
-                      </span>
+                        <span>
+                          {
+                            meta.description
+                          }
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
             </div>
           </section>
 
           <section className="login-card">
-            <div className="login-card-icon">☁</div>
+            <div className="login-card-icon">
+              ☁
+            </div>
 
             <div className="login-eyebrow">
               WELCOME
@@ -896,9 +1541,9 @@ function App() {
             </h2>
 
             <p>
-              Sign in with your Salesforce
-              Developer Org to access your
-              records.
+              Sign in with your
+              Salesforce Developer Org
+              to access your records.
             </p>
 
             <button
@@ -936,11 +1581,19 @@ function App() {
     );
   }
 
+  /*
+   * ==========================================
+   * DASHBOARD
+   * ==========================================
+   */
+
   return (
     <div className="dashboard">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-icon">☁</div>
+          <div className="brand-icon">
+            ☁
+          </div>
 
           <div>
             <strong>
@@ -959,7 +1612,9 @@ function App() {
             Salesforce Connected
           </div>
 
-          <div className="user-avatar">SF</div>
+          <div className="user-avatar">
+            SF
+          </div>
 
           <button
             className="logout-button"
@@ -1011,8 +1666,8 @@ function App() {
               </h2>
 
               <p>
-                Choose one of the five standard
-                Salesforce objects.
+                Choose one of the five
+                standard Salesforce objects.
               </p>
             </div>
           </div>
@@ -1020,16 +1675,24 @@ function App() {
           <div className="select-wrapper">
             <select
               value={objectName}
-              onChange={changeObject}
+              onChange={
+                changeObject
+              }
             >
-              {OBJECTS.map((object) => (
-                <option
-                  value={object}
-                  key={object}
-                >
-                  {OBJECT_META[object].label}
-                </option>
-              ))}
+              {OBJECTS.map(
+                (object) => (
+                  <option
+                    value={object}
+                    key={object}
+                  >
+                    {
+                      OBJECT_META[
+                        object
+                      ].label
+                    }
+                  </option>
+                )
+              )}
             </select>
 
             <span>⌄</span>
@@ -1037,49 +1700,66 @@ function App() {
         </section>
 
         <section className="stats-grid">
-          {OBJECTS.map((object) => {
-            const meta = OBJECT_META[object];
+          {OBJECTS.map(
+            (object) => {
+              const meta =
+                OBJECT_META[
+                  object
+                ];
 
-            return (
-              <button
-                key={object}
-                className={`stat-card ${
-                  object === objectName
-                    ? "stat-active"
-                    : ""
-                }`}
-                onClick={() =>
-                  setObjectName(object)
-                }
-              >
-                <div
-                  className={`stat-icon ${meta.color}`}
+              return (
+                <button
+                  key={object}
+                  className={`stat-card ${
+                    object ===
+                    objectName
+                      ? "stat-active"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    setObjectName(
+                      object
+                    )
+                  }
                 >
-                  {meta.icon}
-                </div>
+                  <div
+                    className={`stat-icon ${meta.color}`}
+                  >
+                    {meta.icon}
+                  </div>
 
-                <div className="stat-details">
-                  <span>{meta.label}</span>
+                  <div className="stat-details">
+                    <span>
+                      {
+                        meta.label
+                      }
+                    </span>
 
-                  <strong>
-                    {loadingCounts
-                      ? "..."
-                      : objectCounts[object] ??
-                        "—"}
-                  </strong>
+                    <strong>
+                      {loadingCounts
+                        ? "..."
+                        : objectCounts[
+                            object
+                          ] ??
+                          "—"}
+                    </strong>
 
-                  <small>
-                    Salesforce records
-                  </small>
-                </div>
-              </button>
-            );
-          })}
+                    <small>
+                      Salesforce
+                      records
+                    </small>
+                  </div>
+                </button>
+              );
+            }
+          )}
         </section>
 
         {error && (
           <div className="alert error-alert">
-            <div className="alert-symbol">!</div>
+            <div className="alert-symbol">
+              !
+            </div>
 
             <div>
               <strong>
@@ -1090,7 +1770,9 @@ function App() {
             </div>
 
             <button
-              onClick={() => setError("")}
+              onClick={() =>
+                setError("")
+              }
             >
               ×
             </button>
@@ -1108,12 +1790,16 @@ function App() {
                 Success
               </strong>
 
-              <p>{successMessage}</p>
+              <p>
+                {successMessage}
+              </p>
             </div>
 
             <button
               onClick={() =>
-                setSuccessMessage("")
+                setSuccessMessage(
+                  ""
+                )
               }
             >
               ×
@@ -1136,7 +1822,9 @@ function App() {
                 </h2>
 
                 <p>
-                  {currentMeta.description}
+                  {
+                    currentMeta.description
+                  }
                 </p>
               </div>
             </div>
@@ -1146,7 +1834,9 @@ function App() {
                 {totalSize.toLocaleString()}
               </strong>
 
-              <span>Total records</span>
+              <span>
+                Total records
+              </span>
             </div>
           </div>
 
@@ -1157,9 +1847,12 @@ function App() {
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(event) =>
+                onChange={(
+                  event
+                ) =>
                   setSearchTerm(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
                 placeholder={`Search ${currentMeta.label.toLowerCase()}...`}
@@ -1168,7 +1861,9 @@ function App() {
               {searchTerm && (
                 <button
                   onClick={() =>
-                    setSearchTerm("")
+                    setSearchTerm(
+                      ""
+                    )
                   }
                 >
                   ×
@@ -1179,19 +1874,35 @@ function App() {
             <div className="toolbar-buttons">
               <button
                 className="refresh-button"
-                onClick={refreshRecords}
+                onClick={
+                  refreshRecords
+                }
               >
                 ↻ Refresh
               </button>
 
               <button
                 className="create-button"
-                onClick={openCreate}
+                onClick={
+                  openCreate
+                }
               >
-                + Create {objectName}
+                + Create{" "}
+                {objectName}
               </button>
             </div>
           </div>
+
+          {/*
+           * ========================================
+           * IMPORTANT SCROLL CONTAINER
+           * ========================================
+           *
+           * The user scrolls INSIDE this element.
+           *
+           * The IntersectionObserver above uses
+           * this element as its root.
+           */}
 
           {loading ? (
             <div className="records-loading">
@@ -1202,197 +1913,222 @@ function App() {
               </h3>
 
               <p>
-                Retrieving your data from
-                Salesforce.
+                Loading first{" "}
+                {PAGE_SIZE} records...
               </p>
             </div>
           ) : (
-            <>
-              <div className="table-wrapper">
-                <table>
-                  <thead>
-                    <tr>
-                      {fields.map((field) => (
-                        <th key={field}>
-                          {getLabel(field)}
+            <div
+              className="table-wrapper"
+              ref={tableWrapperRef}
+            >
+              <table>
+                <thead>
+                  <tr>
+                    {fields.map(
+                      (field) => (
+                        <th
+                          key={field}
+                        >
+                          {getLabel(
+                            field
+                          )}
                         </th>
-                      ))}
+                      )
+                    )}
 
-                      <th className="actions-heading">
-                        ACTIONS
-                      </th>
+                    <th className="actions-heading">
+                      ACTIONS
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredRecords.length ===
+                  0 ? (
+                    <tr>
+                      <td
+                        colSpan={
+                          fields.length +
+                          1
+                        }
+                      >
+                        <div className="empty-state">
+                          <div>
+                            {searchTerm
+                              ? "⌕"
+                              : currentMeta.icon}
+                          </div>
+
+                          <h3>
+                            {searchTerm
+                              ? "No matching records"
+                              : `No ${currentMeta.label.toLowerCase()} found`}
+                          </h3>
+
+                          <p>
+                            {searchTerm
+                              ? "Try a different search."
+                              : "Create your first record to get started."}
+                          </p>
+
+                          {!searchTerm && (
+                            <button
+                              className="create-button"
+                              onClick={
+                                openCreate
+                              }
+                            >
+                              + Create{" "}
+                              {
+                                objectName
+                              }
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-
-                  <tbody>
-                    {filteredRecords.length ===
-                    0 ? (
-                      <tr>
-                        <td
-                          colSpan={
-                            fields.length + 1
+                  ) : (
+                    filteredRecords.map(
+                      (record) => (
+                        <tr
+                          key={
+                            record.Id
                           }
                         >
-                          <div className="empty-state">
-                            <div>
-                              {searchTerm
-                                ? "⌕"
-                                : currentMeta.icon}
-                            </div>
+                          {fields.map(
+                            (field) => {
+                              const value =
+                                record[
+                                  field
+                                ];
 
-                            <h3>
-                              {searchTerm
-                                ? "No matching records"
-                                : `No ${currentMeta.label.toLowerCase()} found`}
-                            </h3>
+                              const badge =
+                                getBadgeClass(
+                                  field,
+                                  value
+                                );
 
-                            <p>
-                              {searchTerm
-                                ? "Try a different search."
-                                : "Create your first record to get started."}
-                            </p>
-
-                            {!searchTerm && (
-                              <button
-                                className="create-button"
-                                onClick={
-                                  openCreate
-                                }
-                              >
-                                + Create{" "}
-                                {objectName}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredRecords.map(
-                        (record) => (
-                          <tr
-                            key={record.Id}
-                          >
-                            {fields.map(
-                              (field) => {
-                                const value =
-                                  record[field];
-
-                                const badge =
-                                  getBadgeClass(
-                                    field,
-                                    value
-                                  );
-
-                                if (
-                                  field ===
-                                    "Name" ||
-                                  field ===
-                                    "Subject"
-                                ) {
-                                  return (
-                                    <td
-                                      key={
-                                        field
-                                      }
-                                    >
-                                      <div className="record-name">
-                                        <div
-                                          className={`record-avatar ${currentMeta.color}`}
-                                        >
-                                          {getInitials(
-                                            record,
-                                            objectName
-                                          )}
-                                        </div>
-
-                                        <div>
-                                          <strong>
-                                            {formatValue(
-                                              value
-                                            )}
-                                          </strong>
-
-                                          <span>
-                                            {
-                                              objectName
-                                            }
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  );
-                                }
-
+                              if (
+                                field ===
+                                  "Name" ||
+                                field ===
+                                  "Subject"
+                              ) {
                                 return (
                                   <td
                                     key={
                                       field
                                     }
                                   >
-                                    {badge ? (
-                                      <span
-                                        className={`status-badge ${badge}`}
+                                    <div className="record-name">
+                                      <div
+                                        className={`record-avatar ${currentMeta.color}`}
                                       >
-                                        {formatValue(
-                                          value
+                                        {getInitials(
+                                          record,
+                                          objectName
                                         )}
-                                      </span>
-                                    ) : (
-                                      formatValue(
-                                        value
-                                      )
-                                    )}
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {formatValue(
+                                            value
+                                          )}
+                                        </strong>
+
+                                        <span>
+                                          {
+                                            objectName
+                                          }
+                                        </span>
+                                      </div>
+                                    </div>
                                   </td>
                                 );
                               }
-                            )}
 
-                            <td>
-                              <div className="row-actions">
-                                <button
-                                  className="view-action"
-                                  onClick={() =>
-                                    openView(
-                                      record
-                                    )
+                              return (
+                                <td
+                                  key={
+                                    field
                                   }
                                 >
-                                  👁 View
-                                </button>
-
-                                <button
-                                  className="edit-action"
-                                  onClick={() =>
-                                    openEdit(
-                                      record
+                                  {badge ? (
+                                    <span
+                                      className={`status-badge ${badge}`}
+                                    >
+                                      {formatValue(
+                                        value
+                                      )}
+                                    </span>
+                                  ) : (
+                                    formatValue(
+                                      value
                                     )
-                                  }
-                                >
-                                  ✏ Edit
-                                </button>
+                                  )}
+                                </td>
+                              );
+                            }
+                          )}
 
-                                <button
-                                  className="delete-action"
-                                  disabled={
-                                    deleting
-                                  }
-                                  onClick={() =>
-                                    deleteRecord(
-                                      record
-                                    )
-                                  }
-                                >
-                                  🗑 Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
+                          <td>
+                            <div className="row-actions">
+                              <button
+                                className="view-action"
+                                onClick={() =>
+                                  openView(
+                                    record
+                                  )
+                                }
+                              >
+                                👁 View
+                              </button>
+
+                              <button
+                                className="edit-action"
+                                onClick={() =>
+                                  openEdit(
+                                    record
+                                  )
+                                }
+                              >
+                                ✏ Edit
+                              </button>
+
+                              <button
+                                className="delete-action"
+                                disabled={
+                                  deleting
+                                }
+                                onClick={() =>
+                                  deleteRecord(
+                                    record
+                                  )
+                                }
+                              >
+                                🗑 Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
                       )
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    )
+                  )}
+                </tbody>
+              </table>
+
+              {/*
+               * ======================================
+               * PAGINATION SENTINEL
+               * ======================================
+               *
+               * This is INSIDE table-wrapper.
+               *
+               * When this comes into view, the next
+               * 20 records are loaded.
+               */}
 
               <div
                 className="scroll-loader"
@@ -1401,35 +2137,51 @@ function App() {
                 {loadingMore && (
                   <div className="loading-more">
                     <div className="small-spinner"></div>
-                    Loading next 20 records...
+
+                    <strong>
+                      Loading next 20
+                      records...
+                    </strong>
                   </div>
                 )}
 
                 {!loadingMore &&
                   hasMore && (
                     <div className="scroll-hint">
-                      ↓ Scroll down to load the
-                      next 20 records
+                      ↓ Scroll down to
+                      load the next 20
+                      records
                     </div>
                   )}
 
                 {!loadingMore &&
                   !hasMore &&
-                  records.length > 0 && (
+                  records.length >
+                    0 && (
                     <div className="all-loaded">
-                      ✓ All Salesforce records loaded
+                      ✓ All{" "}
+                      {records.length.toLocaleString()}{" "}
+                      loaded records
                     </div>
                   )}
               </div>
-            </>
+            </div>
           )}
         </section>
       </main>
 
+      {/*
+       * ==========================================
+       * VIEW MODAL
+       * ==========================================
+       */}
+
       {modal === "view" && (
         <div
           className="modal-overlay"
-          onMouseDown={(event) => {
+          onMouseDown={(
+            event
+          ) => {
             if (
               event.target ===
               event.currentTarget
@@ -1446,13 +2198,16 @@ function App() {
                 </span>
 
                 <h2>
-                  View {objectName}
+                  View{" "}
+                  {objectName}
                 </h2>
               </div>
 
               <button
                 className="modal-close"
-                onClick={closeModal}
+                onClick={
+                  closeModal
+                }
               >
                 ×
               </button>
@@ -1478,35 +2233,43 @@ function App() {
                   )}
                 </h3>
 
-                <p>{objectName}</p>
+                <p>
+                  {objectName}
+                </p>
               </div>
             </div>
 
             <div className="detail-grid">
-              {fields.map((field) => (
-                <div
-                  className="detail-item"
-                  key={field}
-                >
-                  <span>
-                    {getLabel(field)}
-                  </span>
-
-                  <strong>
-                    {formatValue(
-                      selectedRecord?.[
+              {fields.map(
+                (field) => (
+                  <div
+                    className="detail-item"
+                    key={field}
+                  >
+                    <span>
+                      {getLabel(
                         field
-                      ]
-                    )}
-                  </strong>
-                </div>
-              ))}
+                      )}
+                    </span>
+
+                    <strong>
+                      {formatValue(
+                        selectedRecord?.[
+                          field
+                        ]
+                      )}
+                    </strong>
+                  </div>
+                )
+              )}
             </div>
 
             <div className="modal-actions">
               <button
                 className="secondary-button"
-                onClick={closeModal}
+                onClick={
+                  closeModal
+                }
               >
                 Close
               </button>
@@ -1514,7 +2277,9 @@ function App() {
               <button
                 className="create-button"
                 onClick={() =>
-                  openEdit(selectedRecord)
+                  openEdit(
+                    selectedRecord
+                  )
                 }
               >
                 ✏ Edit Record
@@ -1524,11 +2289,19 @@ function App() {
         </div>
       )}
 
+      {/*
+       * ==========================================
+       * CREATE / EDIT MODAL
+       * ==========================================
+       */}
+
       {(modal === "create" ||
         modal === "edit") && (
         <div
           className="modal-overlay"
-          onMouseDown={(event) => {
+          onMouseDown={(
+            event
+          ) => {
             if (
               event.target ===
               event.currentTarget
@@ -1541,13 +2314,15 @@ function App() {
             <div className="modal-header">
               <div>
                 <span>
-                  {modal === "create"
+                  {modal ===
+                  "create"
                     ? "NEW RECORD"
                     : "UPDATE RECORD"}
                 </span>
 
                 <h2>
-                  {modal === "create"
+                  {modal ===
+                  "create"
                     ? `Create ${objectName}`
                     : `Edit ${objectName}`}
                 </h2>
@@ -1555,7 +2330,9 @@ function App() {
 
               <button
                 className="modal-close"
-                onClick={closeModal}
+                onClick={
+                  closeModal
+                }
               >
                 ×
               </button>
@@ -1563,7 +2340,8 @@ function App() {
 
             <form
               onSubmit={
-                modal === "create"
+                modal ===
+                "create"
                   ? createRecord
                   : updateRecord
               }
@@ -1573,75 +2351,112 @@ function App() {
                   CREATE_FIELDS[
                     objectName
                   ] || []
-                ).map((field) => {
-                  const inputType =
-                    getInputType(field);
+                ).map(
+                  (field) => {
+                    const inputType =
+                      getInputType(
+                        field
+                      );
 
-                  return (
-                    <div
-                      className={`form-group ${
-                        inputType ===
-                        "textarea"
-                          ? "full"
-                          : ""
-                      }`}
-                      key={field}
-                    >
-                      <label>
-                        {getLabel(field)}
-                      </label>
+                    return (
+                      <div
+                        className={`form-group ${
+                          inputType ===
+                          "textarea"
+                            ? "full"
+                            : ""
+                        }`}
+                        key={
+                          field
+                        }
+                      >
+                        <label>
+                          {getLabel(
+                            field
+                          )}
+                        </label>
 
-                      {inputType ===
-                      "textarea" ? (
-                        <textarea
-                          rows="4"
-                          value={
-                            formData[
+                        {inputType ===
+                        "textarea" ? (
+                          <textarea
+                            rows="4"
+                            value={
+                              formData[
+                                field
+                              ] ??
+                              ""
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              handleInputChange(
+                                field,
+                                event
+                                  .target
+                                  .value
+                              )
+                            }
+                            placeholder={`Enter ${getLabel(
                               field
-                            ] ?? ""
-                          }
-                          onChange={(event) =>
-                            handleInputChange(
-                              field,
-                              event.target
-                                .value
-                            )
-                          }
-                          placeholder={`Enter ${getLabel(
-                            field
-                          ).toLowerCase()}`}
-                        />
-                      ) : (
-                        <input
-                          type={inputType}
-                          value={
-                            formData[
+                            ).toLowerCase()}`}
+                          />
+                        ) : (
+                          <input
+                            type={
+                              field ===
+                              "Phone"
+                                ? "tel"
+                                : inputType
+                            }
+                            inputMode={
+                              field ===
+                              "Phone"
+                                ? "numeric"
+                                : undefined
+                            }
+                            pattern={
+                              field ===
+                              "Phone"
+                                ? "[0-9]*"
+                                : undefined
+                            }
+                            value={
+                              formData[
+                                field
+                              ] ??
+                              ""
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              handleInputChange(
+                                field,
+                                event
+                                  .target
+                                  .value
+                              )
+                            }
+                            placeholder={`Enter ${getLabel(
                               field
-                            ] ?? ""
-                          }
-                          onChange={(event) =>
-                            handleInputChange(
-                              field,
-                              event.target
-                                .value
-                            )
-                          }
-                          placeholder={`Enter ${getLabel(
-                            field
-                          ).toLowerCase()}`}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+                            ).toLowerCase()}`}
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+                )}
               </div>
 
               <div className="modal-actions">
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={closeModal}
-                  disabled={saving}
+                  onClick={
+                    closeModal
+                  }
+                  disabled={
+                    saving
+                  }
                 >
                   Cancel
                 </button>
@@ -1649,11 +2464,14 @@ function App() {
                 <button
                   type="submit"
                   className="create-button"
-                  disabled={saving}
+                  disabled={
+                    saving
+                  }
                 >
                   {saving
                     ? "Saving..."
-                    : modal === "create"
+                    : modal ===
+                      "create"
                     ? `Create ${objectName}`
                     : "Save Changes"}
                 </button>
