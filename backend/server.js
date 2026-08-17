@@ -48,7 +48,6 @@ const IS_PRODUCTION =
 
 const ALLOWED_FRONTENDS = [
   "http://localhost:5173",
-  "http://localhost:3000",
   "https://salesforce-crud-frontend-gaco.onrender.com",
 ];
 
@@ -68,20 +67,19 @@ if (!CLIENT_SECRET) {
   );
 }
 
-if (SESSION_SECRET === "change-this-secret") {
+if (!SESSION_SECRET) {
   console.warn(
-    "WARNING: SESSION_SECRET is using the default value."
+    "WARNING: SESSION_SECRET is not configured."
   );
 }
 
 /* =========================================================
-   EXPRESS
+   EXPRESS / RENDER PROXY
 ========================================================= */
 
 /*
- * Render runs the Node application behind a reverse proxy.
- *
- * This is required when using secure cookies in production.
+ * Render runs the application behind a proxy.
+ * This is required for secure cookies to work correctly.
  */
 
 if (IS_PRODUCTION) {
@@ -92,11 +90,7 @@ if (IS_PRODUCTION) {
    BODY PARSER
 ========================================================= */
 
-app.use(
-  express.json({
-    limit: "1mb",
-  })
-);
+app.use(express.json());
 
 /* =========================================================
    CORS
@@ -106,8 +100,8 @@ app.use(
   cors({
     origin: function (origin, callback) {
       /*
-       * Requests without an Origin header can happen from
-       * tools such as curl/Postman or server-to-server calls.
+       * Allow requests without an Origin header.
+       * This includes some direct server requests.
        */
 
       if (!origin) {
@@ -118,14 +112,14 @@ app.use(
         return callback(null, true);
       }
 
-      console.warn(
-        "Blocked CORS origin:",
+      console.error(
+        "CORS blocked origin:",
         origin
       );
 
       return callback(
         new Error(
-          "Not allowed by CORS."
+          `Origin ${origin} is not allowed by CORS`
         )
       );
     },
@@ -151,30 +145,11 @@ app.use(
    SESSION
 ========================================================= */
 
-/*
- * IMPORTANT:
- *
- * Frontend:
- *   Render frontend
- *
- * Backend:
- *   Render backend
- *
- * They are different origins, therefore the browser needs
- * credentials enabled and the session cookie must support
- * cross-origin requests.
- *
- * Production:
- *   secure: true
- *   sameSite: "none"
- *
- * Local development:
- *   secure: false
- *   sameSite: "lax"
- */
-
 app.use(
   session({
+    /*
+     * Explicit cookie name.
+     */
     name: "connect.sid",
 
     secret: SESSION_SECRET,
@@ -183,25 +158,35 @@ app.use(
 
     saveUninitialized: false,
 
-    rolling: true,
+    /*
+     * Important when running behind Render proxy.
+     */
+    proxy: IS_PRODUCTION,
 
     cookie: {
       httpOnly: true,
 
+      /*
+       * HTTPS is used on Render.
+       */
       secure: IS_PRODUCTION,
 
-      sameSite:
-        IS_PRODUCTION
-          ? "none"
-          : "lax",
+      /*
+       * Required for cross-origin frontend/backend
+       * requests.
+       */
+      sameSite: "none",
 
+      /*
+       * Make cookie available to all backend routes.
+       */
       path: "/",
 
+      /*
+       * One hour.
+       */
       maxAge:
-        1000 *
-        60 *
-        60 *
-        8,
+        1000 * 60 * 60,
     },
   })
 );
@@ -254,9 +239,8 @@ app.get(
       application:
         "Salesforce CRUD Manager Backend",
 
-      environment:
-        process.env.NODE_ENV ||
-        "development",
+      production:
+        IS_PRODUCTION,
 
       salesforceConfigured:
         Boolean(
@@ -269,9 +253,6 @@ app.get(
 
       apiVersion:
         API_VERSION,
-
-      timestamp:
-        new Date().toISOString(),
     });
   }
 );
@@ -289,10 +270,6 @@ app.get(
 
       status: "running",
 
-      environment:
-        process.env.NODE_ENV ||
-        "development",
-
       salesforceConfigured:
         Boolean(
           CLIENT_ID &&
@@ -307,6 +284,9 @@ app.get(
 
       apiVersion:
         API_VERSION,
+
+      production:
+        IS_PRODUCTION,
     });
   }
 );
@@ -335,10 +315,6 @@ app.get(
           );
       }
 
-      /*
-       * Remember which frontend started the OAuth flow.
-       */
-
       const requestedFrontend =
         req.query.frontend;
 
@@ -349,11 +325,15 @@ app.get(
           ? requestedFrontend
           : FRONTEND_URL;
 
+      /*
+       * Save the frontend that started OAuth.
+       */
+
       req.session.frontendUrl =
         frontendForRedirect;
 
       /*
-       * Generate PKCE values.
+       * PKCE
        */
 
       const codeVerifier =
@@ -364,12 +344,12 @@ app.get(
           codeVerifier
         );
 
+      /*
+       * OAuth state
+       */
+
       const state =
         createState();
-
-      /*
-       * Save OAuth information in session.
-       */
 
       req.session.codeVerifier =
         codeVerifier;
@@ -378,72 +358,7 @@ app.get(
         state;
 
       /*
-       * Salesforce OAuth authorization URL.
-       */
-
-      const params =
-        new URLSearchParams({
-          response_type: "code",
-
-          client_id:
-            CLIENT_ID,
-
-          redirect_uri:
-            REDIRECT_URI,
-
-          code_challenge:
-            codeChallenge,
-
-          code_challenge_method:
-            "S256",
-
-          state,
-        });
-
-      const authorizationUrl =
-        `${SALESFORCE_LOGIN_URL}` +
-        `/services/oauth2/authorize?` +
-        params.toString();
-
-      console.log(
-        "=========================================="
-      );
-
-      console.log(
-        "Starting Salesforce OAuth login"
-      );
-
-      console.log(
-        "Client ID configured:",
-        Boolean(CLIENT_ID)
-      );
-
-      console.log(
-        "Client Secret configured:",
-        Boolean(CLIENT_SECRET)
-      );
-
-      console.log(
-        "Redirect URI:",
-        REDIRECT_URI
-      );
-
-      console.log(
-        "Frontend after OAuth:",
-        frontendForRedirect
-      );
-
-      console.log(
-        "Session ID:",
-        req.sessionID
-      );
-
-      console.log(
-        "=========================================="
-      );
-
-      /*
-       * Explicitly save the OAuth session before
+       * Force session save before
        * redirecting to Salesforce.
        */
 
@@ -451,7 +366,7 @@ app.get(
         (saveError) => {
           if (saveError) {
             console.error(
-              "OAuth session save error:",
+              "OAuth initial session save error:",
               saveError
             );
 
@@ -461,6 +376,62 @@ app.get(
                 "Could not initialize OAuth session."
               );
           }
+
+          const params =
+            new URLSearchParams({
+              response_type: "code",
+
+              client_id:
+                CLIENT_ID,
+
+              redirect_uri:
+                REDIRECT_URI,
+
+              code_challenge:
+                codeChallenge,
+
+              code_challenge_method:
+                "S256",
+
+              state,
+            });
+
+          const authorizationUrl =
+            `${SALESFORCE_LOGIN_URL}` +
+            `/services/oauth2/authorize?` +
+            params.toString();
+
+          console.log(
+            "=========================================="
+          );
+
+          console.log(
+            "Starting Salesforce OAuth login"
+          );
+
+          console.log(
+            "Session ID:",
+            req.sessionID
+          );
+
+          console.log(
+            "Frontend:",
+            frontendForRedirect
+          );
+
+          console.log(
+            "Redirect URI:",
+            REDIRECT_URI
+          );
+
+          console.log(
+            "Production:",
+            IS_PRODUCTION
+          );
+
+          console.log(
+            "=========================================="
+          );
 
           res.redirect(
             authorizationUrl
@@ -502,7 +473,7 @@ app.get(
       );
 
       console.log(
-        "Salesforce OAuth callback received"
+        "OAuth callback received"
       );
 
       console.log(
@@ -516,19 +487,8 @@ app.get(
       );
 
       console.log(
-        "Has OAuth state:",
-        Boolean(
-          req.session?.oauthState
-        )
-      );
-
-      console.log(
         "=========================================="
       );
-
-      /* -----------------------------------------
-         Salesforce returned an OAuth error
-      ----------------------------------------- */
 
       if (error) {
         console.error(
@@ -547,10 +507,6 @@ app.get(
           );
       }
 
-      /* -----------------------------------------
-         Authorization code validation
-      ----------------------------------------- */
-
       if (!code) {
         return res
           .status(400)
@@ -559,9 +515,9 @@ app.get(
           );
       }
 
-      /* -----------------------------------------
-         OAuth state validation
-      ----------------------------------------- */
+      /*
+       * Validate OAuth state.
+       */
 
       if (
         !state ||
@@ -569,7 +525,17 @@ app.get(
           req.session.oauthState
       ) {
         console.error(
-          "OAuth state mismatch."
+          "Invalid OAuth state."
+        );
+
+        console.error(
+          "Received state:",
+          state
+        );
+
+        console.error(
+          "Session state:",
+          req.session.oauthState
         );
 
         return res
@@ -578,10 +544,6 @@ app.get(
             "Invalid OAuth state."
           );
       }
-
-      /* -----------------------------------------
-         PKCE verifier
-      ----------------------------------------- */
 
       const codeVerifier =
         req.session.codeVerifier;
@@ -594,9 +556,10 @@ app.get(
           );
       }
 
-      /* -----------------------------------------
-         Token exchange
-      ----------------------------------------- */
+      /*
+       * Exchange authorization code
+       * for Salesforce access token.
+       */
 
       const tokenParams =
         new URLSearchParams();
@@ -685,19 +648,10 @@ app.get(
           });
       }
 
-      /* -----------------------------------------
-         Validate token response
-      ----------------------------------------- */
-
       if (
         !tokenData.access_token ||
         !tokenData.instance_url
       ) {
-        console.error(
-          "Invalid Salesforce token response:",
-          tokenData
-        );
-
         return res
           .status(500)
           .json({
@@ -706,9 +660,9 @@ app.get(
           });
       }
 
-      /* -----------------------------------------
-         Store Salesforce session
-      ----------------------------------------- */
+      /*
+       * Store Salesforce session.
+       */
 
       req.session.salesforce = {
         accessToken:
@@ -725,12 +679,7 @@ app.get(
           Date.now(),
       };
 
-      /*
-       * OAuth data is no longer needed.
-       */
-
       delete req.session.codeVerifier;
-
       delete req.session.oauthState;
 
       const frontendRedirect =
@@ -761,21 +710,24 @@ app.get(
       );
 
       console.log(
+        "Saving Salesforce session..."
+      );
+
+      console.log(
         "=========================================="
       );
 
       /*
-       * CRITICAL:
-       *
-       * Save the Salesforce session completely
-       * before redirecting to the frontend.
+       * IMPORTANT:
+       * Explicitly save the session before
+       * redirecting to the frontend.
        */
 
       req.session.save(
         (saveError) => {
           if (saveError) {
             console.error(
-              "Final session save error:",
+              "Session save error:",
               saveError
             );
 
@@ -788,6 +740,11 @@ app.get(
 
           console.log(
             "Salesforce session saved successfully."
+          );
+
+          console.log(
+            "Session ID:",
+            req.sessionID
           );
 
           console.log(
@@ -821,11 +778,17 @@ app.get(
 app.get(
   "/auth/status",
   (req, res) => {
-    const authenticated =
+    const hasSession =
+      Boolean(req.session);
+
+    const hasSalesforceSession =
       Boolean(
         req.session &&
           req.session.salesforce
       );
+
+    const authenticated =
+      hasSalesforceSession;
 
     console.log(
       "Auth status check:",
@@ -835,12 +798,13 @@ app.get(
 
         authenticated,
 
-        hasSession:
-          Boolean(req.session),
+        hasSession,
 
-        hasSalesforceSession:
+        hasSalesforceSession,
+
+        hasCookie:
           Boolean(
-            req.session?.salesforce
+            req.headers.cookie
           ),
       }
     );
@@ -868,7 +832,7 @@ app.get(
 app.get(
   "/auth/logout",
   (req, res) => {
-    const sessionId =
+    const oldSessionId =
       req.sessionID;
 
     req.session.destroy(
@@ -887,21 +851,16 @@ app.get(
             });
         }
 
-        /*
-         * Clear the browser session cookie.
-         */
-
         res.clearCookie(
           "connect.sid",
           {
             httpOnly: true,
 
-            secure: IS_PRODUCTION,
+            secure:
+              IS_PRODUCTION,
 
             sameSite:
-              IS_PRODUCTION
-                ? "none"
-                : "lax",
+              "none",
 
             path: "/",
           }
@@ -909,7 +868,7 @@ app.get(
 
         console.log(
           "Session destroyed:",
-          sessionId
+          oldSessionId
         );
 
         res.json({
@@ -945,7 +904,7 @@ function requireSalesforceAuth(
 }
 
 /* =========================================================
-   ALLOWED SALESFORCE OBJECTS
+   ALLOWED OBJECTS
 ========================================================= */
 
 const allowedObjects = [
@@ -957,7 +916,7 @@ const allowedObjects = [
 ];
 
 /* =========================================================
-   SALESFORCE FIELDS
+   FIELDS
 ========================================================= */
 
 const fieldMap = {
@@ -978,7 +937,7 @@ const fieldMap = {
 };
 
 /* =========================================================
-   GET SALESFORCE SESSION
+   SALESFORCE SESSION HELPER
 ========================================================= */
 
 function getSalesforceSession(req) {
@@ -1006,10 +965,6 @@ app.get(
         objectName,
       } = req.params;
 
-      /* -----------------------------------------
-         Validate object
-      ----------------------------------------- */
-
       if (
         !allowedObjects.includes(
           objectName
@@ -1022,10 +977,6 @@ app.get(
               "Invalid Salesforce object.",
           });
       }
-
-      /* -----------------------------------------
-         Page
-      ----------------------------------------- */
 
       const requestedPage =
         parseInt(
@@ -1042,9 +993,7 @@ app.get(
           : 1;
 
       /*
-       * Assignment requirement:
-       *
-       * Load exactly 20 records at a time.
+       * EXACTLY 20 RECORDS PER REQUEST.
        */
 
       const pageSize = 20;
@@ -1052,10 +1001,6 @@ app.get(
       const offset =
         (page - 1) *
         pageSize;
-
-      /* -----------------------------------------
-         Salesforce session
-      ----------------------------------------- */
 
       const salesforce =
         getSalesforceSession(req);
@@ -1074,9 +1019,9 @@ app.get(
         instanceUrl,
       } = salesforce;
 
-      /* -----------------------------------------
-         Count total records
-      ----------------------------------------- */
+      /*
+       * Get total count.
+       */
 
       const countQuery =
         `SELECT COUNT() ` +
@@ -1133,9 +1078,9 @@ app.get(
           countData.totalSize || 0
         );
 
-      /* -----------------------------------------
-         Main SOQL query
-      ----------------------------------------- */
+      /*
+       * Get only 20 records.
+       */
 
       const query =
         `SELECT ${fieldMap[objectName]} ` +
@@ -1144,27 +1089,15 @@ app.get(
         `LIMIT ${pageSize} ` +
         `OFFSET ${offset}`;
 
+      console.log(
+        `${objectName}: loading page ${page}, offset ${offset}, limit ${pageSize}`
+      );
+
       const url =
         `${instanceUrl}` +
         `/services/data/${API_VERSION}` +
         `/query/?q=` +
         encodeURIComponent(query);
-
-      console.log(
-        "Loading Salesforce records:",
-        {
-          object:
-            objectName,
-
-          page,
-
-          pageSize,
-
-          offset,
-
-          totalSize,
-        }
-      );
 
       const response =
         await fetch(url, {
@@ -1182,7 +1115,9 @@ app.get(
       try {
         data =
           text
-            ? JSON.parse(text)
+            ? JSON.parse(
+                text
+              )
             : {};
       } catch {
         data = {};
@@ -1220,8 +1155,6 @@ app.get(
 
         pageSize,
 
-        offset,
-
         hasMore,
 
         nextPage:
@@ -1249,7 +1182,7 @@ app.get(
 );
 
 /* =========================================================
-   CREATE RECORD
+   CREATE
 ========================================================= */
 
 app.post(
@@ -1364,7 +1297,7 @@ app.post(
 );
 
 /* =========================================================
-   UPDATE RECORD
+   UPDATE
 ========================================================= */
 
 app.patch(
@@ -1487,7 +1420,7 @@ app.patch(
 );
 
 /* =========================================================
-   DELETE RECORD
+   DELETE
 ========================================================= */
 
 app.delete(
@@ -1631,22 +1564,6 @@ app.use(
       error
     );
 
-    /*
-     * Handle CORS errors cleanly.
-     */
-
-    if (
-      error.message ===
-      "Not allowed by CORS."
-    ) {
-      return res
-        .status(403)
-        .json({
-          error:
-            "CORS origin not allowed.",
-        });
-    }
-
     res
       .status(500)
       .json({
@@ -1660,7 +1577,7 @@ app.use(
 );
 
 /* =========================================================
-   START SERVER
+   START
 ========================================================= */
 
 app.listen(
@@ -1675,7 +1592,7 @@ app.listen(
     );
 
     console.log(
-      `Server listening on port ${PORT}`
+      `Server running on port ${PORT}`
     );
 
     console.log(
@@ -1691,30 +1608,15 @@ app.listen(
     );
 
     console.log(
-      `Environment: ${
-        process.env.NODE_ENV ||
-        "development"
-      }`
-    );
-
-    console.log(
-      "Session cookie: connect.sid"
-    );
-
-    console.log(
-      "Production secure cookie:",
-      IS_PRODUCTION
-    );
-
-    console.log(
-      "Production SameSite:",
-      IS_PRODUCTION
-        ? "none"
-        : "lax"
+      `Production: ${IS_PRODUCTION}`
     );
 
     console.log(
       "Pagination: 20 records per request"
+    );
+
+    console.log(
+      "Session cookie: connect.sid"
     );
 
     console.log(

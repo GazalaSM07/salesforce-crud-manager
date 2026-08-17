@@ -9,10 +9,6 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://salesforce-crud-backend-rffk.onrender.com";
 
-/* =========================================================
-   SALESFORCE OBJECTS
-========================================================= */
-
 const OBJECTS = [
   "Account",
   "Opportunity",
@@ -20,10 +16,6 @@ const OBJECTS = [
   "Contact",
   "Case",
 ];
-
-/* =========================================================
-   OBJECT METADATA
-========================================================= */
 
 const OBJECT_META = {
   Account: {
@@ -61,10 +53,6 @@ const OBJECT_META = {
     description: "Manage customer support cases",
   },
 };
-
-/* =========================================================
-   DISPLAY FIELDS
-========================================================= */
 
 const FIELD_MAP = {
   Account: [
@@ -113,10 +101,6 @@ const FIELD_MAP = {
   ],
 };
 
-/* =========================================================
-   CREATE / EDIT FIELDS
-========================================================= */
-
 const CREATE_FIELDS = {
   Account: [
     "Name",
@@ -159,10 +143,6 @@ const CREATE_FIELDS = {
   ],
 };
 
-/* =========================================================
-   LABELS
-========================================================= */
-
 const LABELS = {
   Id: "ID",
   Name: "Name",
@@ -189,10 +169,6 @@ function getLabel(field) {
   return LABELS[field] || field;
 }
 
-/* =========================================================
-   FORMAT VALUE
-========================================================= */
-
 function formatValue(value) {
   if (
     value === null ||
@@ -204,10 +180,6 @@ function formatValue(value) {
 
   return String(value);
 }
-
-/* =========================================================
-   INPUT TYPE
-========================================================= */
 
 function getInputType(field) {
   if (field === "Amount") {
@@ -230,6 +202,12 @@ function getInputType(field) {
     return "textarea";
   }
 
+  /*
+   * Phone intentionally stays text.
+   * This allows Salesforce phone numbers
+   * containing +, -, spaces, parentheses, etc.
+   */
+
   if (field === "Phone") {
     return "tel";
   }
@@ -237,24 +215,21 @@ function getInputType(field) {
   return "text";
 }
 
-/* =========================================================
-   INITIALS
-========================================================= */
-
-function getInitials(record, objectName) {
+function getInitials(
+  record,
+  objectName
+) {
   if (objectName === "Account") {
     return (
-      record?.Name
-        ?.substring(0, 2)
-        .toUpperCase() || "AC"
+      record?.Name?.substring(0, 2).toUpperCase() ||
+      "AC"
     );
   }
 
   if (objectName === "Opportunity") {
     return (
-      record?.Name
-        ?.substring(0, 2)
-        .toUpperCase() || "OP"
+      record?.Name?.substring(0, 2).toUpperCase() ||
+      "OP"
     );
   }
 
@@ -281,11 +256,10 @@ function getInitials(record, objectName) {
   return "SF";
 }
 
-/* =========================================================
-   BADGES
-========================================================= */
-
-function getBadgeClass(field, value) {
+function getBadgeClass(
+  field,
+  value
+) {
   if (!value) {
     return "";
   }
@@ -349,10 +323,6 @@ function getBadgeClass(field, value) {
   return "";
 }
 
-/* =========================================================
-   CLEAN PAYLOAD
-========================================================= */
-
 function cleanPayload(data) {
   const result = {};
 
@@ -370,10 +340,6 @@ function cleanPayload(data) {
 
   return result;
 }
-
-/* =========================================================
-   SALESFORCE ERROR
-========================================================= */
 
 function getSalesforceError(data) {
   if (!data) {
@@ -412,119 +378,118 @@ function getSalesforceError(data) {
   );
 }
 
-/* =========================================================
-   APP
-========================================================= */
-
 function App() {
-  /* =======================================================
-     AUTH
-  ======================================================= */
+  const [
+    authenticated,
+    setAuthenticated,
+  ] = useState(false);
 
-  const [authenticated, setAuthenticated] =
-    useState(false);
+  const [
+    checkingAuth,
+    setCheckingAuth,
+  ] = useState(true);
 
-  const [checkingAuth, setCheckingAuth] =
-    useState(true);
+  const [
+    objectName,
+    setObjectName,
+  ] = useState("Account");
 
-  /* =======================================================
-     OBJECT
-  ======================================================= */
+  const [
+    records,
+    setRecords,
+  ] = useState([]);
 
-  const [objectName, setObjectName] =
-    useState("Account");
+  const [
+    totalSize,
+    setTotalSize,
+  ] = useState(0);
 
-  /* =======================================================
-     RECORDS
-  ======================================================= */
+  const [
+    page,
+    setPage,
+  ] = useState(0);
 
-  const [records, setRecords] =
-    useState([]);
+  const [
+    hasMore,
+    setHasMore,
+  ] = useState(false);
 
-  const [totalSize, setTotalSize] =
-    useState(0);
+  const [
+    objectCounts,
+    setObjectCounts,
+  ] = useState({
+    Account: null,
+    Opportunity: null,
+    Lead: null,
+    Contact: null,
+    Case: null,
+  });
 
-  const [page, setPage] =
-    useState(0);
+  const [
+    loadingCounts,
+    setLoadingCounts,
+  ] = useState(false);
 
-  const [hasMore, setHasMore] =
-    useState(false);
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
 
-  /* =======================================================
-     OBJECT COUNTS
-  ======================================================= */
+  const [
+    loadingMore,
+    setLoadingMore,
+  ] = useState(false);
 
-  const [objectCounts, setObjectCounts] =
-    useState({
-      Account: null,
-      Opportunity: null,
-      Lead: null,
-      Contact: null,
-      Case: null,
-    });
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  const [loadingCounts, setLoadingCounts] =
-    useState(false);
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] = useState("");
 
-  /* =======================================================
-     LOADING
-  ======================================================= */
+  const [
+    modal,
+    setModal,
+  ] = useState(null);
 
-  const [loading, setLoading] =
-    useState(false);
+  const [
+    selectedRecord,
+    setSelectedRecord,
+  ] = useState(null);
 
-  const [loadingMore, setLoadingMore] =
-    useState(false);
+  const [
+    formData,
+    setFormData,
+  ] = useState({});
 
-  /* =======================================================
-     MESSAGES
-  ======================================================= */
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [
+    deleting,
+    setDeleting,
+  ] = useState(false);
 
-  const [successMessage, setSuccessMessage] =
-    useState("");
+  const [
+    searchTerm,
+    setSearchTerm,
+  ] = useState("");
 
-  /* =======================================================
-     MODALS
-  ======================================================= */
+  const loaderRef =
+    useRef(null);
 
-  const [modal, setModal] =
-    useState(null);
+  /*
+   * Prevent multiple simultaneous
+   * infinite-scroll requests.
+   */
 
-  const [selectedRecord, setSelectedRecord] =
-    useState(null);
-
-  const [formData, setFormData] =
-    useState({});
-
-  /* =======================================================
-     CRUD LOADING
-  ======================================================= */
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [deleting, setDeleting] =
-    useState(false);
-
-  /* =======================================================
-     SEARCH
-  ======================================================= */
-
-  const [searchTerm, setSearchTerm] =
-    useState("");
-
-  /* =======================================================
-     INFINITE SCROLL
-  ======================================================= */
-
-  const loaderRef = useRef(null);
-
-  /* =======================================================
-     CURRENT OBJECT DATA
-  ======================================================= */
+  const loadingMoreRef =
+    useRef(false);
 
   const currentMeta =
     OBJECT_META[objectName];
@@ -533,7 +498,7 @@ function App() {
     FIELD_MAP[objectName];
 
   /* =======================================================
-     SUCCESS MESSAGE AUTO HIDE
+     SUCCESS MESSAGE
   ======================================================= */
 
   useEffect(() => {
@@ -541,9 +506,10 @@ function App() {
       return;
     }
 
-    const timer = setTimeout(() => {
-      setSuccessMessage("");
-    }, 4000);
+    const timer =
+      setTimeout(() => {
+        setSuccessMessage("");
+      }, 4000);
 
     return () =>
       clearTimeout(timer);
@@ -553,18 +519,22 @@ function App() {
      CHECK AUTHENTICATION
   ======================================================= */
 
-  const checkAuth = useCallback(
-    async () => {
+  const checkAuth =
+    useCallback(async () => {
       try {
         setCheckingAuth(true);
 
         /*
          * Give the browser a moment to restore
-         * the Salesforce session cookie after
-         * the OAuth redirect.
+         * the session cookie after OAuth redirect.
          */
-        await new Promise((resolve) =>
-          setTimeout(resolve, 500)
+
+        await new Promise(
+          (resolve) =>
+            setTimeout(
+              resolve,
+              500
+            )
         );
 
         const response =
@@ -594,7 +564,9 @@ function App() {
         );
 
         setAuthenticated(
-          Boolean(data.authenticated)
+          Boolean(
+            data.authenticated
+          )
         );
       } catch (err) {
         console.error(
@@ -606,13 +578,7 @@ function App() {
       } finally {
         setCheckingAuth(false);
       }
-    },
-    []
-  );
-
-  /* =======================================================
-     INITIAL AUTH CHECK
-  ======================================================= */
+    }, []);
 
   useEffect(() => {
     checkAuth();
@@ -636,6 +602,8 @@ function App() {
                     await fetch(
                       `${API_URL}/api/records/${object}?page=1`,
                       {
+                        method: "GET",
+
                         credentials:
                           "include",
 
@@ -647,7 +615,9 @@ function App() {
                   const data =
                     await response.json();
 
-                  if (!response.ok) {
+                  if (
+                    !response.ok
+                  ) {
                     return [
                       object,
                       null,
@@ -675,19 +645,20 @@ function App() {
 
         results.forEach(
           ([object, count]) => {
-            counts[object] = count;
+            counts[object] =
+              count;
           }
         );
 
-        setObjectCounts(counts);
+        setObjectCounts(
+          counts
+        );
       } finally {
-        setLoadingCounts(false);
+        setLoadingCounts(
+          false
+        );
       }
     }, []);
-
-  /* =======================================================
-     LOAD COUNTS AFTER AUTH
-  ======================================================= */
 
   useEffect(() => {
     if (!authenticated) {
@@ -702,6 +673,7 @@ function App() {
 
   /* =======================================================
      LOAD RECORDS
+     20 RECORDS PER REQUEST
   ======================================================= */
 
   const loadRecords =
@@ -713,6 +685,9 @@ function App() {
         try {
           if (append) {
             setLoadingMore(true);
+
+            loadingMoreRef.current =
+              true;
           } else {
             setLoading(true);
           }
@@ -737,10 +712,18 @@ function App() {
             await response.json();
 
           if (!response.ok) {
+            if (
+              response.status ===
+              401
+            ) {
+              setAuthenticated(
+                false
+              );
+            }
+
             throw new Error(
-              getSalesforceError(
-                data
-              )
+              data.error ||
+                "Failed to load records."
             );
           }
 
@@ -748,11 +731,9 @@ function App() {
             data.records || [];
 
           /*
-           * First request replaces records.
-           *
-           * Subsequent requests append
-           * the next 20 records.
+           * Append the next 20 records.
            */
+
           if (append) {
             setRecords(
               (previous) => [
@@ -794,37 +775,53 @@ function App() {
                 ),
             })
           );
+
+          console.log(
+            `Loaded ${incomingRecords.length} records`,
+            {
+              object:
+                objectName,
+
+              page:
+                data.page,
+
+              pageSize:
+                data.pageSize,
+
+              totalSize:
+                data.totalSize,
+
+              hasMore:
+                data.hasMore,
+            }
+          );
         } catch (err) {
           console.error(
             "Load records error:",
             err
           );
 
-          if (
-            err.message
-              .toLowerCase()
-              .includes(
-                "not authenticated"
-              )
-          ) {
-            setAuthenticated(
-              false
-            );
-          }
-
           setError(
             err.message
           );
         } finally {
-          setLoading(false);
-          setLoadingMore(false);
+          if (append) {
+            setLoadingMore(
+              false
+            );
+
+            loadingMoreRef.current =
+              false;
+          } else {
+            setLoading(false);
+          }
         }
       },
       [objectName]
     );
 
   /* =======================================================
-     LOAD FIRST 20 WHEN OBJECT CHANGES
+     INITIAL RECORD LOAD
   ======================================================= */
 
   useEffect(() => {
@@ -833,12 +830,12 @@ function App() {
     }
 
     setRecords([]);
-
     setPage(0);
-
     setHasMore(false);
-
     setSearchTerm("");
+
+    loadingMoreRef.current =
+      false;
 
     loadRecords(1, false);
   }, [
@@ -871,25 +868,31 @@ function App() {
 
           if (
             entry.isIntersecting &&
+            !loading &&
             !loadingMore &&
-            !loading
+            !loadingMoreRef.current
           ) {
-            const nextPage =
-              page + 1;
-
             console.log(
-              `Loading page ${nextPage} - next 20 records`
+              "Scroll reached bottom. Loading page:",
+              page + 1
             );
 
             loadRecords(
-              nextPage,
+              page + 1,
               true
             );
           }
         },
         {
+          root: null,
+
+          /*
+           * Start loading slightly before
+           * the user reaches the bottom.
+           */
+
           rootMargin:
-            "300px",
+            "0px 0px 300px 0px",
 
           threshold: 0,
         }
@@ -897,12 +900,13 @@ function App() {
 
     observer.observe(element);
 
-    return () =>
+    return () => {
       observer.disconnect();
+    };
   }, [
     hasMore,
-    loadingMore,
     loading,
+    loadingMore,
     page,
     loadRecords,
   ]);
@@ -935,8 +939,7 @@ function App() {
           credentials:
             "include",
 
-          cache:
-            "no-store",
+          cache: "no-store",
         }
       );
     } catch (err) {
@@ -947,25 +950,23 @@ function App() {
     }
 
     setAuthenticated(false);
-
     setRecords([]);
-
     setPage(0);
-
     setHasMore(false);
   }
 
   /* =======================================================
-     CHANGE OBJECT
+     OBJECT CHANGE
   ======================================================= */
 
-  function changeObject(event) {
+  function changeObject(
+    event
+  ) {
     setObjectName(
       event.target.value
     );
 
     setError("");
-
     setSearchTerm("");
   }
 
@@ -987,7 +988,7 @@ function App() {
   }
 
   /* =======================================================
-     CREATE MODAL
+     CREATE
   ======================================================= */
 
   function openCreate() {
@@ -1000,13 +1001,18 @@ function App() {
 
     fieldsToCreate.forEach(
       (field) => {
-        initialData[field] = "";
+        initialData[field] =
+          "";
       }
     );
 
-    setFormData(initialData);
+    setFormData(
+      initialData
+    );
 
-    setSelectedRecord(null);
+    setSelectedRecord(
+      null
+    );
 
     setModal("create");
 
@@ -1014,11 +1020,15 @@ function App() {
   }
 
   /* =======================================================
-     VIEW MODAL
+     VIEW
   ======================================================= */
 
-  function openView(record) {
-    setSelectedRecord(record);
+  function openView(
+    record
+  ) {
+    setSelectedRecord(
+      record
+    );
 
     setModal("view");
 
@@ -1026,10 +1036,12 @@ function App() {
   }
 
   /* =======================================================
-     EDIT MODAL
+     EDIT
   ======================================================= */
 
-  function openEdit(record) {
+  function openEdit(
+    record
+  ) {
     const fieldsToEdit =
       CREATE_FIELDS[
         objectName
@@ -1040,13 +1052,18 @@ function App() {
     fieldsToEdit.forEach(
       (field) => {
         initialData[field] =
-          record[field] ?? "";
+          record[field] ??
+          "";
       }
     );
 
-    setSelectedRecord(record);
+    setSelectedRecord(
+      record
+    );
 
-    setFormData(initialData);
+    setFormData(
+      initialData
+    );
 
     setModal("edit");
 
@@ -1066,9 +1083,9 @@ function App() {
     }
 
     setModal(null);
-
-    setSelectedRecord(null);
-
+    setSelectedRecord(
+      null
+    );
     setFormData({});
   }
 
@@ -1080,21 +1097,10 @@ function App() {
     field,
     value
   ) {
-    /*
-     * Phone field:
-     * Allow digits and common phone
-     * symbols only.
-     */
-    if (field === "Phone") {
-      value = value.replace(
-        /[^0-9+\-() ]/g,
-        ""
-      );
-    }
-
     setFormData(
       (previous) => ({
         ...previous,
+
         [field]: value,
       })
     );
@@ -1111,7 +1117,6 @@ function App() {
 
     try {
       setSaving(true);
-
       setError("");
 
       const response =
@@ -1154,9 +1159,9 @@ function App() {
       );
 
       /*
-       * Reload first 20 records
-       * after creating a record.
+       * Reload first page.
        */
+
       await loadRecords(
         1,
         false
@@ -1164,11 +1169,6 @@ function App() {
 
       await loadObjectCounts();
     } catch (err) {
-      console.error(
-        "Create error:",
-        err
-      );
-
       setError(
         err.message
       );
@@ -1186,7 +1186,9 @@ function App() {
   ) {
     event.preventDefault();
 
-    if (!selectedRecord?.Id) {
+    if (
+      !selectedRecord?.Id
+    ) {
       setError(
         "Record ID is missing."
       );
@@ -1196,7 +1198,6 @@ function App() {
 
     try {
       setSaving(true);
-
       setError("");
 
       const response =
@@ -1238,9 +1239,6 @@ function App() {
         `${objectName} updated successfully.`
       );
 
-      /*
-       * Reload first page after update.
-       */
       await loadRecords(
         1,
         false
@@ -1248,11 +1246,6 @@ function App() {
 
       await loadObjectCounts();
     } catch (err) {
-      console.error(
-        "Update error:",
-        err
-      );
-
       setError(
         err.message
       );
@@ -1283,7 +1276,6 @@ function App() {
 
     try {
       setDeleting(true);
-
       setError("");
 
       const response =
@@ -1349,11 +1341,6 @@ function App() {
         `${objectName} deleted successfully.`
       );
     } catch (err) {
-      console.error(
-        "Delete error:",
-        err
-      );
-
       setError(
         err.message
       );
@@ -1382,16 +1369,21 @@ function App() {
 
         return Object.values(
           record
-        ).some((value) =>
-          String(value ?? "")
-            .toLowerCase()
-            .includes(search)
+        ).some(
+          (value) =>
+            String(
+              value ?? ""
+            )
+              .toLowerCase()
+              .includes(
+                search
+              )
         );
       }
     );
 
   /* =======================================================
-     AUTH CHECK LOADING SCREEN
+     CHECKING AUTH SCREEN
   ======================================================= */
 
   if (checkingAuth) {
@@ -1418,7 +1410,7 @@ function App() {
   }
 
   /* =======================================================
-     LOGIN PAGE
+     LOGIN SCREEN
   ======================================================= */
 
   if (!authenticated) {
@@ -1488,9 +1480,7 @@ function App() {
                       <div
                         className={`feature-icon ${meta.color}`}
                       >
-                        {
-                          meta.icon
-                        }
+                        {meta.icon}
                       </div>
 
                       <div>
@@ -1527,9 +1517,9 @@ function App() {
             </h2>
 
             <p>
-              Sign in with your Salesforce
-              Developer Org to access your
-              records.
+              Sign in with your
+              Salesforce Developer Org
+              to access your records.
             </p>
 
             <button
@@ -1545,19 +1535,16 @@ function App() {
 
             <div className="login-security">
               <span>✓</span>
-
               OAuth 2.0 authentication
             </div>
 
             <div className="login-security">
               <span>✓</span>
-
               No Salesforce password stored
             </div>
 
             <div className="login-security">
               <span>✓</span>
-
               Secure session-based access
             </div>
           </section>
@@ -1576,10 +1563,6 @@ function App() {
 
   return (
     <div className="dashboard">
-      {/* =================================================
-          TOP BAR
-      ================================================= */}
-
       <header className="topbar">
         <div className="brand">
           <div className="brand-icon">
@@ -1600,7 +1583,6 @@ function App() {
         <div className="topbar-right">
           <div className="connected">
             <span></span>
-
             Salesforce Connected
           </div>
 
@@ -1617,15 +1599,7 @@ function App() {
         </div>
       </header>
 
-      {/* =================================================
-          MAIN CONTENT
-      ================================================= */}
-
       <main className="dashboard-content">
-        {/* =================================================
-            WELCOME
-        ================================================= */}
-
         <section className="welcome-section">
           <div>
             <div className="section-label">
@@ -1644,14 +1618,9 @@ function App() {
 
           <div className="workspace-badge">
             <span>●</span>
-
             Developer Org
           </div>
         </section>
-
-        {/* =================================================
-            OBJECT SELECTOR
-        ================================================= */}
 
         <section className="object-selector-card">
           <div className="selector-info">
@@ -1671,8 +1640,8 @@ function App() {
               </h2>
 
               <p>
-                Choose one of the five standard
-                Salesforce objects.
+                Choose one of the five
+                standard Salesforce objects.
               </p>
             </div>
           </div>
@@ -1680,7 +1649,9 @@ function App() {
           <div className="select-wrapper">
             <select
               value={objectName}
-              onChange={changeObject}
+              onChange={
+                changeObject
+              }
             >
               {OBJECTS.map(
                 (object) => (
@@ -1701,10 +1672,6 @@ function App() {
             <span>⌄</span>
           </div>
         </section>
-
-        {/* =================================================
-            OBJECT STATS
-        ================================================= */}
 
         <section className="stats-grid">
           {OBJECTS.map(
@@ -1737,9 +1704,7 @@ function App() {
 
                   <div className="stat-details">
                     <span>
-                      {
-                        meta.label
-                      }
+                      {meta.label}
                     </span>
 
                     <strong>
@@ -1760,10 +1725,6 @@ function App() {
             }
           )}
         </section>
-
-        {/* =================================================
-            ERROR
-        ================================================= */}
 
         {error && (
           <div className="alert error-alert">
@@ -1790,10 +1751,6 @@ function App() {
             </button>
           </div>
         )}
-
-        {/* =================================================
-            SUCCESS
-        ================================================= */}
 
         {successMessage && (
           <div className="alert success-alert">
@@ -1823,15 +1780,7 @@ function App() {
           </div>
         )}
 
-        {/* =================================================
-            RECORDS SECTION
-        ================================================= */}
-
         <section className="records-section">
-          {/* =================================================
-              RECORD HEADER
-          ================================================= */}
-
           <div className="records-header">
             <div className="records-title">
               <div
@@ -1842,9 +1791,7 @@ function App() {
 
               <div>
                 <h2>
-                  {
-                    currentMeta.label
-                  }
+                  {currentMeta.label}
                 </h2>
 
                 <p>
@@ -1865,10 +1812,6 @@ function App() {
               </span>
             </div>
           </div>
-
-          {/* =================================================
-              TOOLBAR
-          ================================================= */}
 
           <div className="toolbar">
             <div className="search-box">
@@ -1925,30 +1868,20 @@ function App() {
             </div>
           </div>
 
-          {/* =================================================
-              LOADING FIRST 20
-          ================================================= */}
-
           {loading ? (
             <div className="records-loading">
               <div className="spinner"></div>
 
               <h3>
-                Loading Salesforce
-                records...
+                Loading Salesforce records...
               </h3>
 
               <p>
-                Retrieving your data from
-                Salesforce.
+                Loading the first 20 records.
               </p>
             </div>
           ) : (
             <>
-              {/* =================================================
-                  TABLE
-              ================================================= */}
-
               <div className="table-wrapper">
                 <table>
                   <thead>
@@ -1956,9 +1889,7 @@ function App() {
                       {fields.map(
                         (field) => (
                           <th
-                            key={
-                              field
-                            }
+                            key={field}
                           >
                             {getLabel(
                               field
@@ -2020,7 +1951,9 @@ function App() {
                       </tr>
                     ) : (
                       filteredRecords.map(
-                        (record) => (
+                        (
+                          record
+                        ) => (
                           <tr
                             key={
                               record.Id
@@ -2164,18 +2097,17 @@ function App() {
                   <div className="loading-more">
                     <div className="small-spinner"></div>
 
-                    <span>
-                      Loading next 20
-                      records...
-                    </span>
+                    Loading next 20
+                    records...
                   </div>
                 )}
 
                 {!loadingMore &&
                   hasMore && (
                     <div className="scroll-hint">
-                      ↓ Scroll down to load
-                      the next 20 records
+                      ↓ Scroll down to
+                      load the next 20
+                      records
                     </div>
                   )}
 
@@ -2201,7 +2133,9 @@ function App() {
       {modal === "view" && (
         <div
           className="modal-overlay"
-          onMouseDown={(event) => {
+          onMouseDown={(
+            event
+          ) => {
             if (
               event.target ===
               event.currentTarget
@@ -2218,7 +2152,8 @@ function App() {
                 </span>
 
                 <h2>
-                  View {objectName}
+                  View{" "}
+                  {objectName}
                 </h2>
               </div>
 
@@ -2316,7 +2251,9 @@ function App() {
         modal === "edit") && (
         <div
           className="modal-overlay"
-          onMouseDown={(event) => {
+          onMouseDown={(
+            event
+          ) => {
             if (
               event.target ===
               event.currentTarget
@@ -2381,9 +2318,7 @@ function App() {
                             ? "full"
                             : ""
                         }`}
-                        key={
-                          field
-                        }
+                        key={field}
                       >
                         <label>
                           {getLabel(
@@ -2426,13 +2361,6 @@ function App() {
                               ] ??
                               ""
                             }
-                            inputMode={
-                              field ===
-                              "Phone"
-                                ? "tel"
-                                : undefined
-                            }
-                            autoComplete="off"
                             onChange={(
                               event
                             ) =>
