@@ -1,13 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://salesforce-crud-backend-rffk.onrender.com";
+
+const PAGE_SIZE = 20;
 
 const OBJECTS = [
   "Account",
@@ -198,27 +195,18 @@ function getInputType(field) {
     return "url";
   }
 
-  if (field === "Description") {
-    return "textarea";
-  }
-
-  /*
-   * Phone intentionally stays text.
-   * This allows Salesforce phone numbers
-   * containing +, -, spaces, parentheses, etc.
-   */
-
   if (field === "Phone") {
     return "tel";
+  }
+
+  if (field === "Description") {
+    return "textarea";
   }
 
   return "text";
 }
 
-function getInitials(
-  record,
-  objectName
-) {
+function getInitials(record, objectName) {
   if (objectName === "Account") {
     return (
       record?.Name?.substring(0, 2).toUpperCase() ||
@@ -237,15 +225,11 @@ function getInitials(
     objectName === "Lead" ||
     objectName === "Contact"
   ) {
-    const first =
-      record?.FirstName?.[0] || "";
-
-    const last =
-      record?.LastName?.[0] || "";
+    const first = record?.FirstName?.[0] || "";
+    const last = record?.LastName?.[0] || "";
 
     return (
-      `${first}${last}`.toUpperCase() ||
-      "US"
+      `${first}${last}`.toUpperCase() || "US"
     );
   }
 
@@ -256,16 +240,12 @@ function getInitials(
   return "SF";
 }
 
-function getBadgeClass(
-  field,
-  value
-) {
+function getBadgeClass(field, value) {
   if (!value) {
     return "";
   }
 
-  const normalized =
-    String(value).toLowerCase();
+  const normalized = String(value).toLowerCase();
 
   if (
     field === "StageName" ||
@@ -307,15 +287,11 @@ function getBadgeClass(
       return "badge-danger";
     }
 
-    if (
-      normalized.includes("medium")
-    ) {
+    if (normalized.includes("medium")) {
       return "badge-warning";
     }
 
-    if (
-      normalized.includes("low")
-    ) {
+    if (normalized.includes("low")) {
       return "badge-success";
     }
   }
@@ -349,15 +325,13 @@ function getSalesforceError(data) {
   if (Array.isArray(data.details)) {
     return data.details
       .map((item) => {
-        if (
-          typeof item === "string"
-        ) {
+        if (typeof item === "string") {
           return item;
         }
 
         return (
-          item.message ||
-          item.errorCode ||
+          item?.message ||
+          item?.errorCode ||
           JSON.stringify(item)
         );
       })
@@ -374,180 +348,139 @@ function getSalesforceError(data) {
 
   return (
     data.error ||
+    data.message ||
     "Salesforce request failed."
   );
 }
 
 function App() {
-  const [
-    authenticated,
-    setAuthenticated,
-  ] = useState(false);
+  const [authenticated, setAuthenticated] =
+    useState(false);
 
-  const [
-    checkingAuth,
-    setCheckingAuth,
-  ] = useState(true);
+  const [checkingAuth, setCheckingAuth] =
+    useState(true);
 
-  const [
-    objectName,
-    setObjectName,
-  ] = useState("Account");
+  const [objectName, setObjectName] =
+    useState("Account");
 
-  const [
-    records,
-    setRecords,
-  ] = useState([]);
+  const [records, setRecords] = useState([]);
 
-  const [
-    totalSize,
-    setTotalSize,
-  ] = useState(0);
+  const [totalSize, setTotalSize] =
+    useState(0);
 
-  const [
-    page,
-    setPage,
-  ] = useState(0);
+  const [page, setPage] = useState(0);
 
-  const [
-    hasMore,
-    setHasMore,
-  ] = useState(false);
+  const [hasMore, setHasMore] =
+    useState(false);
 
-  const [
-    objectCounts,
-    setObjectCounts,
-  ] = useState({
-    Account: null,
-    Opportunity: null,
-    Lead: null,
-    Contact: null,
-    Case: null,
-  });
+  const [objectCounts, setObjectCounts] =
+    useState({
+      Account: null,
+      Opportunity: null,
+      Lead: null,
+      Contact: null,
+      Case: null,
+    });
 
-  const [
-    loadingCounts,
-    setLoadingCounts,
-  ] = useState(false);
+  const [loadingCounts, setLoadingCounts] =
+    useState(false);
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [
-    loadingMore,
-    setLoadingMore,
-  ] = useState(false);
+  const [loadingMore, setLoadingMore] =
+    useState(false);
 
-  const [
-    error,
-    setError,
-  ] = useState("");
+  const [error, setError] = useState("");
 
-  const [
-    successMessage,
-    setSuccessMessage,
-  ] = useState("");
+  const [successMessage, setSuccessMessage] =
+    useState("");
 
-  const [
-    modal,
-    setModal,
-  ] = useState(null);
+  const [modal, setModal] = useState(null);
 
-  const [
-    selectedRecord,
-    setSelectedRecord,
-  ] = useState(null);
+  const [selectedRecord, setSelectedRecord] =
+    useState(null);
 
-  const [
-    formData,
-    setFormData,
-  ] = useState({});
+  const [formData, setFormData] = useState({});
 
-  const [
-    saving,
-    setSaving,
-  ] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [
-    deleting,
-    setDeleting,
-  ] = useState(false);
+  const [deleting, setDeleting] =
+    useState(false);
 
-  const [
-    searchTerm,
-    setSearchTerm,
-  ] = useState("");
+  const [searchTerm, setSearchTerm] =
+    useState("");
 
-  const loaderRef =
-    useRef(null);
+  const loaderRef = useRef(null);
 
-  /*
-   * Prevent multiple simultaneous
-   * infinite-scroll requests.
-   */
+  const loadingMoreRef = useRef(false);
 
-  const loadingMoreRef =
-    useRef(false);
+  const loadingRef = useRef(false);
 
   const currentMeta =
     OBJECT_META[objectName];
 
-  const fields =
-    FIELD_MAP[objectName];
+  const fields = FIELD_MAP[objectName];
 
-  /* =======================================================
-     SUCCESS MESSAGE
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * SUCCESS MESSAGE AUTO HIDE
+   * ---------------------------------------------------------
+   */
 
   useEffect(() => {
     if (!successMessage) {
       return;
     }
 
-    const timer =
-      setTimeout(() => {
-        setSuccessMessage("");
-      }, 4000);
+    const timer = setTimeout(() => {
+      setSuccessMessage("");
+    }, 4000);
 
-    return () =>
-      clearTimeout(timer);
+    return () => clearTimeout(timer);
   }, [successMessage]);
 
-  /* =======================================================
-     CHECK AUTHENTICATION
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * AUTH CHECK
+   *
+   * Important:
+   * After Salesforce redirects back to Render, the browser
+   * may need a small amount of time before the session cookie
+   * is available to the frontend request.
+   *
+   * Therefore we retry several times instead of immediately
+   * showing the login page.
+   * ---------------------------------------------------------
+   */
 
-  const checkAuth =
-    useCallback(async () => {
+  const checkAuth = useCallback(
+    async (attempt = 0) => {
+      const maxAttempts = 5;
+
       try {
         setCheckingAuth(true);
 
         /*
-         * Give the browser a moment to restore
-         * the session cookie after OAuth redirect.
+         * Give the browser a moment to restore the
+         * session cookie after OAuth redirect.
          */
-
-        await new Promise(
-          (resolve) =>
-            setTimeout(
-              resolve,
-              500
-            )
+        await new Promise((resolve) =>
+          setTimeout(resolve, attempt === 0 ? 500 : 1000)
         );
 
-        const response =
-          await fetch(
-            `${API_URL}/auth/status`,
-            {
-              method: "GET",
-
-              credentials: "include",
-
-              cache: "no-store",
-            }
-          );
+        const response = await fetch(
+          `${API_URL}/auth/status`,
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+              "Cache-Control": "no-cache",
+            },
+          }
+        );
 
         if (!response.ok) {
           throw new Error(
@@ -555,108 +488,141 @@ function App() {
           );
         }
 
-        const data =
-          await response.json();
+        const data = await response.json();
 
         console.log(
           "Salesforce authentication status:",
           data
         );
 
-        setAuthenticated(
-          Boolean(
-            data.authenticated
-          )
-        );
+        if (data.authenticated) {
+          setAuthenticated(true);
+          return;
+        }
+
+        /*
+         * If OAuth just completed but the session is not
+         * visible yet, retry.
+         */
+        if (
+          attempt < maxAttempts - 1
+        ) {
+          console.log(
+            `Authentication not ready. Retrying ${
+              attempt + 1
+            }/${maxAttempts}...`
+          );
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1200)
+          );
+
+          return checkAuth(attempt + 1);
+        }
+
+        setAuthenticated(false);
       } catch (err) {
         console.error(
           "Authentication check failed:",
           err
         );
 
+        if (
+          attempt < maxAttempts - 1
+        ) {
+          console.log(
+            `Retrying authentication check ${
+              attempt + 1
+            }/${maxAttempts}...`
+          );
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1200)
+          );
+
+          return checkAuth(attempt + 1);
+        }
+
         setAuthenticated(false);
       } finally {
-        setCheckingAuth(false);
+        /*
+         * Only the final attempt should stop
+         * the loading screen.
+         */
+        if (attempt >= maxAttempts - 1) {
+          setCheckingAuth(false);
+        }
       }
-    }, []);
+    },
+    []
+  );
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  /* =======================================================
-     LOAD OBJECT COUNTS
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * LOAD OBJECT COUNTS
+   * ---------------------------------------------------------
+   */
 
   const loadObjectCounts =
     useCallback(async () => {
       try {
         setLoadingCounts(true);
 
-        const results =
-          await Promise.all(
-            OBJECTS.map(
-              async (object) => {
-                try {
-                  const response =
-                    await fetch(
-                      `${API_URL}/api/records/${object}?page=1`,
-                      {
-                        method: "GET",
-
-                        credentials:
-                          "include",
-
-                        cache:
-                          "no-store",
-                      }
-                    );
-
-                  const data =
-                    await response.json();
-
-                  if (
-                    !response.ok
-                  ) {
-                    return [
-                      object,
-                      null,
-                    ];
-                  }
-
-                  return [
-                    object,
-                    Number(
-                      data.totalSize ||
-                        0
-                    ),
-                  ];
-                } catch {
-                  return [
-                    object,
-                    null,
-                  ];
+        const results = await Promise.all(
+          OBJECTS.map(async (object) => {
+            try {
+              const response = await fetch(
+                `${API_URL}/api/records/${object}?page=1`,
+                {
+                  method: "GET",
+                  credentials: "include",
+                  cache: "no-store",
+                  headers: {
+                    Accept:
+                      "application/json",
+                  },
                 }
+              );
+
+              const data =
+                await response.json();
+
+              if (!response.ok) {
+                return [object, null];
               }
-            )
-          );
+
+              return [
+                object,
+                Number(
+                  data.totalSize || 0
+                ),
+              ];
+            } catch (err) {
+              console.error(
+                `Failed to load ${object} count:`,
+                err
+              );
+
+              return [object, null];
+            }
+          })
+        );
 
         const counts = {};
 
         results.forEach(
           ([object, count]) => {
-            counts[object] =
-              count;
+            counts[object] = count;
           }
         );
 
-        setObjectCounts(
-          counts
-        );
+        setObjectCounts(counts);
       } finally {
-        setLoadingCounts(
-          false
-        );
+        setLoadingCounts(false);
       }
     }, []);
 
@@ -671,158 +637,190 @@ function App() {
     loadObjectCounts,
   ]);
 
-  /* =======================================================
-     LOAD RECORDS
-     20 RECORDS PER REQUEST
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * LOAD RECORDS
+   *
+   * Backend must return maximum 20 records per page.
+   *
+   * page=1 -> first 20
+   * page=2 -> next 20
+   * page=3 -> next 20
+   * etc.
+   * ---------------------------------------------------------
+   */
 
-  const loadRecords =
-    useCallback(
-      async (
-        requestedPage = 1,
-        append = false
-      ) => {
-        try {
-          if (append) {
-            setLoadingMore(true);
+  const loadRecords = useCallback(
+    async (
+      requestedPage = 1,
+      append = false
+    ) => {
+      /*
+       * Prevent duplicate pagination requests.
+       */
+      if (
+        append &&
+        (loadingMoreRef.current ||
+          loadingRef.current)
+      ) {
+        return;
+      }
 
-            loadingMoreRef.current =
-              true;
-          } else {
-            setLoading(true);
-          }
-
-          setError("");
-
-          const response =
-            await fetch(
-              `${API_URL}/api/records/${objectName}?page=${requestedPage}`,
-              {
-                method: "GET",
-
-                credentials:
-                  "include",
-
-                cache:
-                  "no-store",
-              }
-            );
-
-          const data =
-            await response.json();
-
-          if (!response.ok) {
-            if (
-              response.status ===
-              401
-            ) {
-              setAuthenticated(
-                false
-              );
-            }
-
-            throw new Error(
-              data.error ||
-                "Failed to load records."
-            );
-          }
-
-          const incomingRecords =
-            data.records || [];
-
-          /*
-           * Append the next 20 records.
-           */
-
-          if (append) {
-            setRecords(
-              (previous) => [
-                ...previous,
-                ...incomingRecords,
-              ]
-            );
-          } else {
-            setRecords(
-              incomingRecords
-            );
-          }
-
-          setTotalSize(
-            Number(
-              data.totalSize || 0
-            )
-          );
-
-          setPage(
-            Number(
-              data.page ||
-                requestedPage
-            )
-          );
-
-          setHasMore(
-            Boolean(data.hasMore)
-          );
-
-          setObjectCounts(
-            (previous) => ({
-              ...previous,
-
-              [objectName]:
-                Number(
-                  data.totalSize ||
-                    0
-                ),
-            })
-          );
-
-          console.log(
-            `Loaded ${incomingRecords.length} records`,
-            {
-              object:
-                objectName,
-
-              page:
-                data.page,
-
-              pageSize:
-                data.pageSize,
-
-              totalSize:
-                data.totalSize,
-
-              hasMore:
-                data.hasMore,
-            }
-          );
-        } catch (err) {
-          console.error(
-            "Load records error:",
-            err
-          );
-
-          setError(
-            err.message
-          );
-        } finally {
-          if (append) {
-            setLoadingMore(
-              false
-            );
-
-            loadingMoreRef.current =
-              false;
-          } else {
-            setLoading(false);
-          }
+      try {
+        if (append) {
+          loadingMoreRef.current = true;
+          setLoadingMore(true);
+        } else {
+          loadingRef.current = true;
+          setLoading(true);
         }
-      },
-      [objectName]
-    );
 
-  /* =======================================================
-     INITIAL RECORD LOAD
-  ======================================================= */
+        setError("");
+
+        const response = await fetch(
+          `${API_URL}/api/records/${objectName}?page=${requestedPage}&limit=${PAGE_SIZE}`,
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+              "Cache-Control": "no-cache",
+            },
+          }
+        );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            getSalesforceError(data)
+          );
+        }
+
+        const incomingRecords =
+          Array.isArray(data.records)
+            ? data.records
+            : [];
+
+        console.log(
+          `Loaded page ${requestedPage}:`,
+          incomingRecords.length,
+          "records"
+        );
+
+        if (append) {
+          setRecords(
+            (previous) => {
+              /*
+               * Protect against duplicate IDs.
+               */
+              const existingIds =
+                new Set(
+                  previous.map(
+                    (record) =>
+                      record.Id
+                  )
+                );
+
+              const newRecords =
+                incomingRecords.filter(
+                  (record) =>
+                    !existingIds.has(
+                      record.Id
+                    )
+                );
+
+              return [
+                ...previous,
+                ...newRecords,
+              ];
+            }
+          );
+        } else {
+          setRecords(
+            incomingRecords
+          );
+        }
+
+        setTotalSize(
+          Number(data.totalSize || 0)
+        );
+
+        const serverPage =
+          Number(
+            data.page ||
+              requestedPage
+          );
+
+        setPage(serverPage);
+
+        /*
+         * Prefer backend hasMore value.
+         *
+         * Fallback calculation is included in case
+         * backend doesn't return hasMore.
+         */
+        const backendHasMore =
+          typeof data.hasMore ===
+          "boolean"
+            ? data.hasMore
+            : serverPage *
+                PAGE_SIZE <
+              Number(
+                data.totalSize || 0
+              );
+
+        setHasMore(
+          Boolean(backendHasMore)
+        );
+
+        setObjectCounts(
+          (previous) => ({
+            ...previous,
+            [objectName]:
+              Number(
+                data.totalSize || 0
+              ),
+          })
+        );
+      } catch (err) {
+        console.error(
+          "Failed to load records:",
+          err
+        );
+
+        if (
+          String(err.message)
+            .toLowerCase()
+            .includes(
+              "not authenticated"
+            )
+        ) {
+          setAuthenticated(false);
+        }
+
+        setError(
+          err.message ||
+            "Failed to load records."
+        );
+      } finally {
+        loadingRef.current = false;
+        loadingMoreRef.current = false;
+
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [objectName]
+  );
+
+  /*
+   * ---------------------------------------------------------
+   * LOAD FIRST PAGE WHEN OBJECT CHANGES
+   * ---------------------------------------------------------
+   */
 
   useEffect(() => {
     if (!authenticated) {
@@ -832,10 +830,11 @@ function App() {
     setRecords([]);
     setPage(0);
     setHasMore(false);
+    setTotalSize(0);
     setSearchTerm("");
 
-    loadingMoreRef.current =
-      false;
+    loadingRef.current = false;
+    loadingMoreRef.current = false;
 
     loadRecords(1, false);
   }, [
@@ -844,9 +843,16 @@ function App() {
     loadRecords,
   ]);
 
-  /* =======================================================
-     INFINITE SCROLL
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * INFINITE SCROLL
+   *
+   * When the loader at the bottom enters the viewport,
+   * fetch page + 1.
+   *
+   * 20 -> 40 -> 60 -> 80 -> ...
+   * ---------------------------------------------------------
+   */
 
   useEffect(() => {
     const element =
@@ -868,32 +874,25 @@ function App() {
 
           if (
             entry.isIntersecting &&
-            !loading &&
-            !loadingMore &&
+            !loadingRef.current &&
             !loadingMoreRef.current
           ) {
+            const nextPage =
+              page + 1;
+
             console.log(
-              "Scroll reached bottom. Loading page:",
-              page + 1
+              `Bottom reached. Loading page ${nextPage}...`
             );
 
             loadRecords(
-              page + 1,
+              nextPage,
               true
             );
           }
         },
         {
           root: null,
-
-          /*
-           * Start loading slightly before
-           * the user reaches the bottom.
-           */
-
-          rootMargin:
-            "0px 0px 300px 0px",
-
+          rootMargin: "400px 0px",
           threshold: 0,
         }
       );
@@ -905,29 +904,39 @@ function App() {
     };
   }, [
     hasMore,
-    loading,
-    loadingMore,
     page,
     loadRecords,
   ]);
 
-  /* =======================================================
-     LOGIN
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * LOGIN
+   * ---------------------------------------------------------
+   */
 
   function login() {
     const frontendUrl =
       window.location.origin;
 
-    window.location.href =
+    const loginUrl =
       `${API_URL}/auth/login?frontend=${encodeURIComponent(
         frontendUrl
       )}`;
+
+    console.log(
+      "Redirecting to Salesforce login:",
+      loginUrl
+    );
+
+    window.location.href =
+      loginUrl;
   }
 
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * LOGOUT
+   * ---------------------------------------------------------
+   */
 
   async function logout() {
     try {
@@ -935,33 +944,35 @@ function App() {
         `${API_URL}/auth/logout`,
         {
           method: "GET",
-
-          credentials:
-            "include",
-
+          credentials: "include",
           cache: "no-store",
         }
       );
     } catch (err) {
       console.error(
-        "Logout error:",
+        "Logout failed:",
         err
       );
     }
 
     setAuthenticated(false);
     setRecords([]);
-    setPage(0);
-    setHasMore(false);
+    setObjectCounts({
+      Account: null,
+      Opportunity: null,
+      Lead: null,
+      Contact: null,
+      Case: null,
+    });
   }
 
-  /* =======================================================
-     OBJECT CHANGE
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * OBJECT CHANGE
+   * ---------------------------------------------------------
+   */
 
-  function changeObject(
-    event
-  ) {
+  function changeObject(event) {
     setObjectName(
       event.target.value
     );
@@ -970,16 +981,14 @@ function App() {
     setSearchTerm("");
   }
 
-  /* =======================================================
-     REFRESH
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * REFRESH
+   * ---------------------------------------------------------
+   */
 
   async function refreshRecords() {
-    await loadRecords(
-      1,
-      false
-    );
-
+    await loadRecords(1, false);
     await loadObjectCounts();
 
     setSuccessMessage(
@@ -987,9 +996,11 @@ function App() {
     );
   }
 
-  /* =======================================================
-     CREATE
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * CREATE MODAL
+   * ---------------------------------------------------------
+   */
 
   function openCreate() {
     const fieldsToCreate =
@@ -1001,8 +1012,7 @@ function App() {
 
     fieldsToCreate.forEach(
       (field) => {
-        initialData[field] =
-          "";
+        initialData[field] = "";
       }
     );
 
@@ -1010,38 +1020,30 @@ function App() {
       initialData
     );
 
-    setSelectedRecord(
-      null
-    );
-
+    setSelectedRecord(null);
     setModal("create");
-
     setError("");
   }
 
-  /* =======================================================
-     VIEW
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * VIEW MODAL
+   * ---------------------------------------------------------
+   */
 
-  function openView(
-    record
-  ) {
-    setSelectedRecord(
-      record
-    );
-
+  function openView(record) {
+    setSelectedRecord(record);
     setModal("view");
-
     setError("");
   }
 
-  /* =======================================================
-     EDIT
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * EDIT MODAL
+   * ---------------------------------------------------------
+   */
 
-  function openEdit(
-    record
-  ) {
+  function openEdit(record) {
     const fieldsToEdit =
       CREATE_FIELDS[
         objectName
@@ -1052,27 +1054,23 @@ function App() {
     fieldsToEdit.forEach(
       (field) => {
         initialData[field] =
-          record[field] ??
-          "";
+          record?.[field] ?? "";
       }
     );
 
-    setSelectedRecord(
-      record
-    );
-
+    setSelectedRecord(record);
     setFormData(
       initialData
     );
-
     setModal("edit");
-
     setError("");
   }
 
-  /* =======================================================
-     CLOSE MODAL
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * CLOSE MODAL
+   * ---------------------------------------------------------
+   */
 
   function closeModal() {
     if (
@@ -1083,15 +1081,15 @@ function App() {
     }
 
     setModal(null);
-    setSelectedRecord(
-      null
-    );
+    setSelectedRecord(null);
     setFormData({});
   }
 
-  /* =======================================================
-     INPUT CHANGE
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * FORM INPUT
+   * ---------------------------------------------------------
+   */
 
   function handleInputChange(
     field,
@@ -1100,15 +1098,16 @@ function App() {
     setFormData(
       (previous) => ({
         ...previous,
-
         [field]: value,
       })
     );
   }
 
-  /* =======================================================
-     CREATE RECORD
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * CREATE RECORD
+   * ---------------------------------------------------------
+   */
 
   async function createRecord(
     event
@@ -1119,24 +1118,25 @@ function App() {
       setSaving(true);
       setError("");
 
+      const payload =
+        cleanPayload(
+          formData
+        );
+
       const response =
         await fetch(
           `${API_URL}/api/records/${objectName}`,
           {
             method: "POST",
-
-            credentials:
-              "include",
-
+            credentials: "include",
             headers: {
               "Content-Type":
                 "application/json",
+              Accept:
+                "application/json",
             },
-
             body: JSON.stringify(
-              cleanPayload(
-                formData
-              )
+              payload
             ),
           }
         );
@@ -1146,22 +1146,22 @@ function App() {
 
       if (!response.ok) {
         throw new Error(
-          getSalesforceError(
-            data
-          )
+          getSalesforceError(data)
         );
       }
 
-      closeModal();
+      setModal(null);
+      setSelectedRecord(null);
+      setFormData({});
 
       setSuccessMessage(
         `${objectName} created successfully.`
       );
 
       /*
-       * Reload first page.
+       * Reload from page 1 so the new record
+       * appears in the latest dataset.
        */
-
       await loadRecords(
         1,
         false
@@ -1169,17 +1169,25 @@ function App() {
 
       await loadObjectCounts();
     } catch (err) {
+      console.error(
+        "Create failed:",
+        err
+      );
+
       setError(
-        err.message
+        err.message ||
+          "Failed to create record."
       );
     } finally {
       setSaving(false);
     }
   }
 
-  /* =======================================================
-     UPDATE RECORD
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * UPDATE RECORD
+   * ---------------------------------------------------------
+   */
 
   async function updateRecord(
     event
@@ -1200,24 +1208,25 @@ function App() {
       setSaving(true);
       setError("");
 
+      const payload =
+        cleanPayload(
+          formData
+        );
+
       const response =
         await fetch(
           `${API_URL}/api/records/${objectName}/${selectedRecord.Id}`,
           {
             method: "PATCH",
-
-            credentials:
-              "include",
-
+            credentials: "include",
             headers: {
               "Content-Type":
                 "application/json",
+              Accept:
+                "application/json",
             },
-
             body: JSON.stringify(
-              cleanPayload(
-                formData
-              )
+              payload
             ),
           }
         );
@@ -1227,13 +1236,13 @@ function App() {
 
       if (!response.ok) {
         throw new Error(
-          getSalesforceError(
-            data
-          )
+          getSalesforceError(data)
         );
       }
 
-      closeModal();
+      setModal(null);
+      setSelectedRecord(null);
+      setFormData({});
 
       setSuccessMessage(
         `${objectName} updated successfully.`
@@ -1246,17 +1255,25 @@ function App() {
 
       await loadObjectCounts();
     } catch (err) {
+      console.error(
+        "Update failed:",
+        err
+      );
+
       setError(
-        err.message
+        err.message ||
+          "Failed to update record."
       );
     } finally {
       setSaving(false);
     }
   }
 
-  /* =======================================================
-     DELETE RECORD
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * DELETE RECORD
+   * ---------------------------------------------------------
+   */
 
   async function deleteRecord(
     record
@@ -1283,9 +1300,11 @@ function App() {
           `${API_URL}/api/records/${objectName}/${record.Id}`,
           {
             method: "DELETE",
-
-            credentials:
-              "include",
+            credentials: "include",
+            headers: {
+              Accept:
+                "application/json",
+            },
           }
         );
 
@@ -1294,9 +1313,7 @@ function App() {
 
       if (!response.ok) {
         throw new Error(
-          getSalesforceError(
-            data
-          )
+          getSalesforceError(data)
         );
       }
 
@@ -1320,7 +1337,6 @@ function App() {
       setObjectCounts(
         (previous) => ({
           ...previous,
-
           [objectName]:
             previous[
               objectName
@@ -1341,17 +1357,25 @@ function App() {
         `${objectName} deleted successfully.`
       );
     } catch (err) {
+      console.error(
+        "Delete failed:",
+        err
+      );
+
       setError(
-        err.message
+        err.message ||
+          "Failed to delete record."
       );
     } finally {
       setDeleting(false);
     }
   }
 
-  /* =======================================================
-     SEARCH
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * SEARCH
+   * ---------------------------------------------------------
+   */
 
   const filteredRecords =
     records.filter(
@@ -1375,16 +1399,16 @@ function App() {
               value ?? ""
             )
               .toLowerCase()
-              .includes(
-                search
-              )
+              .includes(search)
         );
       }
     );
 
-  /* =======================================================
-     CHECKING AUTH SCREEN
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * AUTH LOADING SCREEN
+   * ---------------------------------------------------------
+   */
 
   if (checkingAuth) {
     return (
@@ -1409,9 +1433,11 @@ function App() {
     );
   }
 
-  /* =======================================================
-     LOGIN SCREEN
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * LOGIN PAGE
+   * ---------------------------------------------------------
+   */
 
   if (!authenticated) {
     return (
@@ -1480,7 +1506,9 @@ function App() {
                       <div
                         className={`feature-icon ${meta.color}`}
                       >
-                        {meta.icon}
+                        {
+                          meta.icon
+                        }
                       </div>
 
                       <div>
@@ -1517,9 +1545,9 @@ function App() {
             </h2>
 
             <p>
-              Sign in with your
-              Salesforce Developer Org
-              to access your records.
+              Sign in with your Salesforce
+              Developer Org to access
+              your records.
             </p>
 
             <button
@@ -1557,9 +1585,11 @@ function App() {
     );
   }
 
-  /* =======================================================
-     DASHBOARD
-  ======================================================= */
+  /*
+   * ---------------------------------------------------------
+   * DASHBOARD
+   * ---------------------------------------------------------
+   */
 
   return (
     <div className="dashboard">
@@ -1649,9 +1679,7 @@ function App() {
           <div className="select-wrapper">
             <select
               value={objectName}
-              onChange={
-                changeObject
-              }
+              onChange={changeObject}
             >
               {OBJECTS.map(
                 (object) => (
@@ -1737,9 +1765,7 @@ function App() {
                 Something went wrong
               </strong>
 
-              <p>
-                {error}
-              </p>
+              <p>{error}</p>
             </div>
 
             <button
@@ -1819,15 +1845,10 @@ function App() {
 
               <input
                 type="text"
-                value={
-                  searchTerm
-                }
-                onChange={(
-                  event
-                ) =>
+                value={searchTerm}
+                onChange={(event) =>
                   setSearchTerm(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 placeholder={`Search ${currentMeta.label.toLowerCase()}...`}
@@ -1852,6 +1873,7 @@ function App() {
                 onClick={
                   refreshRecords
                 }
+                disabled={loading}
               >
                 ↻ Refresh
               </button>
@@ -1877,7 +1899,8 @@ function App() {
               </h3>
 
               <p>
-                Loading the first 20 records.
+                Retrieving your data from
+                Salesforce.
               </p>
             </div>
           ) : (
@@ -1951,9 +1974,7 @@ function App() {
                       </tr>
                     ) : (
                       filteredRecords.map(
-                        (
-                          record
-                        ) => (
+                        (record) => (
                           <tr
                             key={
                               record.Id
@@ -2085,10 +2106,11 @@ function App() {
                 </table>
               </div>
 
-              {/* =================================================
-                  INFINITE SCROLL LOADER
-              ================================================= */}
-
+              {/*
+               * IMPORTANT:
+               * This element is always present below the table.
+               * IntersectionObserver watches this element.
+               */}
               <div
                 className="scroll-loader"
                 ref={loaderRef}
@@ -2097,8 +2119,10 @@ function App() {
                   <div className="loading-more">
                     <div className="small-spinner"></div>
 
-                    Loading next 20
-                    records...
+                    <strong>
+                      Loading next 20
+                      records...
+                    </strong>
                   </div>
                 )}
 
@@ -2126,16 +2150,16 @@ function App() {
         </section>
       </main>
 
-      {/* =====================================================
-          VIEW MODAL
-      ===================================================== */}
+      /*
+       * -----------------------------------------------------
+       * VIEW MODAL
+       * -----------------------------------------------------
+       */
 
       {modal === "view" && (
         <div
           className="modal-overlay"
-          onMouseDown={(
-            event
-          ) => {
+          onMouseDown={(event) => {
             if (
               event.target ===
               event.currentTarget
@@ -2152,8 +2176,7 @@ function App() {
                 </span>
 
                 <h2>
-                  View{" "}
-                  {objectName}
+                  View {objectName}
                 </h2>
               </div>
 
@@ -2183,7 +2206,13 @@ function App() {
                     selectedRecord?.Name ||
                       selectedRecord?.Subject ||
                       selectedRecord?.Company ||
-                      `${selectedRecord?.FirstName || ""} ${selectedRecord?.LastName || ""}`
+                      `${
+                        selectedRecord?.FirstName ||
+                        ""
+                      } ${
+                        selectedRecord?.LastName ||
+                        ""
+                      }`
                   )}
                 </h3>
 
@@ -2243,17 +2272,17 @@ function App() {
         </div>
       )}
 
-      {/* =====================================================
-          CREATE / EDIT MODAL
-      ===================================================== */}
+      /*
+       * -----------------------------------------------------
+       * CREATE / EDIT MODAL
+       * -----------------------------------------------------
+       */
 
       {(modal === "create" ||
         modal === "edit") && (
         <div
           className="modal-overlay"
-          onMouseDown={(
-            event
-          ) => {
+          onMouseDown={(event) => {
             if (
               event.target ===
               event.currentTarget
@@ -2266,15 +2295,13 @@ function App() {
             <div className="modal-header">
               <div>
                 <span>
-                  {modal ===
-                  "create"
+                  {modal === "create"
                     ? "NEW RECORD"
                     : "UPDATE RECORD"}
                 </span>
 
                 <h2>
-                  {modal ===
-                  "create"
+                  {modal === "create"
                     ? `Create ${objectName}`
                     : `Edit ${objectName}`}
                 </h2>
@@ -2285,6 +2312,10 @@ function App() {
                 onClick={
                   closeModal
                 }
+                disabled={
+                  saving ||
+                  deleting
+                }
               >
                 ×
               </button>
@@ -2292,8 +2323,7 @@ function App() {
 
             <form
               onSubmit={
-                modal ===
-                "create"
+                modal === "create"
                   ? createRecord
                   : updateRecord
               }
@@ -2370,6 +2400,21 @@ function App() {
                                   .target
                                   .value
                               )
+                            }
+                            inputMode={
+                              field ===
+                              "Phone"
+                                ? "tel"
+                                : undefined
+                            }
+                            autoComplete={
+                              field ===
+                              "Phone"
+                                ? "tel"
+                                : field ===
+                                  "Email"
+                                ? "email"
+                                : "off"
                             }
                             placeholder={`Enter ${getLabel(
                               field
