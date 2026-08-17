@@ -1,126 +1,106 @@
-require("dotenv").config();
-
 const express = require("express");
-const session = require("express-session");
 const cors = require("cors");
-const crypto = require("crypto");
+const session = require("express-session");
+require("dotenv").config();
 
 const app = express();
 
-/* =========================================================
-   CONFIGURATION
-========================================================= */
+const PORT = process.env.PORT || 10000;
 
-const PORT = process.env.PORT || 5000;
+// ============================================================
+// URLs
+// ============================================================
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL ||
-  "http://localhost:5173";
+  "https://salesforce-crud-frontend-gaco.onrender.com";
+
+const API_URL =
+  process.env.API_URL ||
+  "https://salesforce-crud-backend-rffk.onrender.com";
+
+// ============================================================
+// Salesforce OAuth configuration
+// ============================================================
+
+const SALESFORCE_CLIENT_ID =
+  process.env.SALESFORCE_CLIENT_ID ||
+  process.env.CLIENT_ID;
+
+const SALESFORCE_CLIENT_SECRET =
+  process.env.SALESFORCE_CLIENT_SECRET ||
+  process.env.CLIENT_SECRET;
+
+const SALESFORCE_CALLBACK_URL =
+  process.env.SALESFORCE_CALLBACK_URL ||
+  `${API_URL}/auth/callback`;
 
 const SALESFORCE_LOGIN_URL =
   process.env.SALESFORCE_LOGIN_URL ||
   "https://login.salesforce.com";
 
-const CLIENT_ID =
-  process.env.SALESFORCE_CLIENT_ID;
-
-const CLIENT_SECRET =
-  process.env.SALESFORCE_CLIENT_SECRET;
-
-const REDIRECT_URI =
-  process.env.SALESFORCE_REDIRECT_URI ||
-  "http://localhost:5000/oauth/callback";
+const SALESFORCE_API_VERSION =
+  process.env.SALESFORCE_API_VERSION || "v66.0";
 
 const SESSION_SECRET =
   process.env.SESSION_SECRET ||
-  "change-this-secret";
+  "PLEASE_CHANGE_THIS_SECRET";
 
-const API_VERSION =
-  process.env.SALESFORCE_API_VERSION ||
-  "v66.0";
+// ============================================================
+// Basic validation
+// ============================================================
 
-const IS_PRODUCTION =
-  process.env.NODE_ENV === "production";
-
-/* =========================================================
-   ALLOWED FRONTENDS
-========================================================= */
-
-const ALLOWED_FRONTENDS = [
-  "http://localhost:5173",
-  "https://salesforce-crud-frontend-gaco.onrender.com",
-];
-
-/* =========================================================
-   VALIDATION
-========================================================= */
-
-if (!CLIENT_ID) {
-  console.warn(
-    "WARNING: SALESFORCE_CLIENT_ID is not configured."
+if (!SALESFORCE_CLIENT_ID) {
+  console.error(
+    "ERROR: SALESFORCE_CLIENT_ID / CLIENT_ID is missing."
   );
 }
 
-if (!CLIENT_SECRET) {
-  console.warn(
-    "WARNING: SALESFORCE_CLIENT_SECRET is not configured."
+if (!SALESFORCE_CLIENT_SECRET) {
+  console.error(
+    "ERROR: SALESFORCE_CLIENT_SECRET / CLIENT_SECRET is missing."
   );
 }
 
-if (!SESSION_SECRET) {
-  console.warn(
-    "WARNING: SESSION_SECRET is not configured."
-  );
-}
+// ============================================================
+// Render reverse proxy
+// ============================================================
 
-/* =========================================================
-   EXPRESS / RENDER PROXY
-========================================================= */
+app.set("trust proxy", 1);
 
-/*
- * Render runs the application behind a proxy.
- * This is required for secure cookies to work correctly.
- */
+// ============================================================
+// Middleware
+// ============================================================
 
-if (IS_PRODUCTION) {
-  app.set("trust proxy", 1);
-}
+app.use(express.json({ limit: "2mb" }));
 
-/* =========================================================
-   BODY PARSER
-========================================================= */
-
-app.use(express.json());
-
-/* =========================================================
-   CORS
-========================================================= */
+// ============================================================
+// CORS
+// ============================================================
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      /*
-       * Allow requests without an Origin header.
-       * This includes some direct server requests.
-       */
+      const allowedOrigins = [
+        FRONTEND_URL,
+        "http://localhost:5173",
+        "http://localhost:3000",
+      ];
 
+      // Allow requests without an Origin header
+      // such as direct browser/server requests.
       if (!origin) {
         return callback(null, true);
       }
 
-      if (ALLOWED_FRONTENDS.includes(origin)) {
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      console.error(
-        "CORS blocked origin:",
-        origin
-      );
+      console.log("Blocked CORS origin:", origin);
 
       return callback(
-        new Error(
-          `Origin ${origin} is not allowed by CORS`
-        )
+        new Error("Not allowed by CORS")
       );
     },
 
@@ -141,16 +121,24 @@ app.use(
   })
 );
 
-/* =========================================================
-   SESSION
-========================================================= */
+// ============================================================
+// SESSION
+// ============================================================
+//
+// IMPORTANT:
+// DO NOT use:
+//
+// domain: ".onrender.com"
+//
+// The cookie belongs to the backend host.
+// The frontend accesses it through:
+// fetch(API_URL, { credentials: "include" })
+//
+// ============================================================
 
 app.use(
   session({
-    /*
-     * Explicit cookie name.
-     */
-    name: "connect.sid",
+    name: "salesforce.sid",
 
     secret: SESSION_SECRET,
 
@@ -158,283 +146,375 @@ app.use(
 
     saveUninitialized: false,
 
-    /*
-     * Important when running behind Render proxy.
-     */
-    proxy: IS_PRODUCTION,
+    rolling: true,
 
     cookie: {
       httpOnly: true,
 
-      /*
-       * HTTPS is used on Render.
-       */
-      secure: IS_PRODUCTION,
+      secure: true,
 
-      /*
-       * Required for cross-origin frontend/backend
-       * requests.
-       */
       sameSite: "none",
 
-      /*
-       * Make cookie available to all backend routes.
-       */
+      // IMPORTANT:
+      // No "domain" property.
+      // This makes it a host-only cookie
+      // for the Render backend.
+
       path: "/",
 
-      /*
-       * One hour.
-       */
       maxAge:
-        1000 * 60 * 60,
+        1000 *
+        60 *
+        60 *
+        24 *
+        7,
     },
   })
 );
 
-/* =========================================================
-   PKCE HELPERS
-========================================================= */
+// ============================================================
+// Helpers
+// ============================================================
 
-function base64UrlEncode(buffer) {
-  return buffer
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-}
-
-function createCodeVerifier() {
-  return base64UrlEncode(
-    crypto.randomBytes(32)
-  );
-}
-
-function createCodeChallenge(
-  verifier
+function requireSalesforceSession(
+  req,
+  res,
+  next
 ) {
-  return base64UrlEncode(
-    crypto
-      .createHash("sha256")
-      .update(verifier)
-      .digest()
-  );
+  if (
+    !req.session ||
+    !req.session.salesforce ||
+    !req.session.salesforce.accessToken ||
+    !req.session.salesforce.instanceUrl
+  ) {
+    return res.status(401).json({
+      error:
+        "Not authenticated with Salesforce.",
+    });
+  }
+
+  next();
 }
 
-function createState() {
-  return base64UrlEncode(
-    crypto.randomBytes(32)
-  );
+function getSalesforceApiUrl(req, path) {
+  const instanceUrl =
+    req.session.salesforce.instanceUrl;
+
+  return `${instanceUrl}/services/data/${SALESFORCE_API_VERSION}${path}`;
 }
 
-/* =========================================================
-   HEALTH
-========================================================= */
+async function salesforceRequest(
+  req,
+  path,
+  options = {}
+) {
+  const accessToken =
+    req.session.salesforce.accessToken;
+
+  const response = await fetch(
+    getSalesforceApiUrl(req, path),
+    {
+      ...options,
+
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+
+        "Content-Type":
+          "application/json",
+
+        ...(options.headers || {}),
+      },
+    }
+  );
+
+  const text = await response.text();
+
+  let data;
+
+  try {
+    data = text
+      ? JSON.parse(text)
+      : {};
+  } catch {
+    data = {
+      message: text,
+    };
+  }
+
+  return {
+    response,
+    data,
+  };
+}
+
+function sendSalesforceError(
+  res,
+  response,
+  data
+) {
+  return res.status(response.status).json({
+    error:
+      data?.[0]?.message ||
+      data?.message ||
+      "Salesforce request failed.",
+
+    details: data,
+  });
+}
+
+// ============================================================
+// Health check
+// ============================================================
+
+app.get("/", (req, res) => {
+  res.json({
+    message:
+      "Salesforce CRUD backend is running.",
+
+    status: "ok",
+  });
+});
+
+// ============================================================
+// DEBUG SESSION
+// ============================================================
+
+app.get("/auth/debug", (req, res) => {
+  res.set(
+    "Cache-Control",
+    "no-store"
+  );
+
+  return res.json({
+    sessionId: req.sessionID,
+
+    hasSession: Boolean(req.session),
+
+    authenticated: Boolean(
+      req.session?.salesforce?.accessToken
+    ),
+
+    instanceUrl:
+      req.session?.salesforce?.instanceUrl ||
+      null,
+
+    cookie: {
+      name: "salesforce.sid",
+
+      secure: true,
+
+      sameSite: "none",
+
+      domain: "HOST-ONLY",
+
+      path: "/",
+    },
+  });
+});
+
+// ============================================================
+// AUTH STATUS
+// ============================================================
 
 app.get(
-  "/health",
+  "/auth/status",
   (req, res) => {
-    res.json({
-      status: "ok",
+    res.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
 
-      application:
-        "Salesforce CRUD Manager Backend",
+    res.set(
+      "Pragma",
+      "no-cache"
+    );
 
-      production:
-        IS_PRODUCTION,
+    res.set(
+      "Expires",
+      "0"
+    );
 
-      salesforceConfigured:
-        Boolean(
-          CLIENT_ID &&
-          CLIENT_SECRET
-        ),
+    const hasSession =
+      Boolean(req.session);
 
-      sessionConfigured:
-        Boolean(SESSION_SECRET),
+    const hasSalesforceSession =
+      Boolean(
+        req.session?.salesforce?.accessToken &&
+          req.session?.salesforce?.instanceUrl
+      );
 
-      apiVersion:
-        API_VERSION,
+    console.log(
+      "===================================="
+    );
+
+    console.log(
+      "AUTH STATUS REQUEST"
+    );
+
+    console.log(
+      "Session ID:",
+      req.sessionID
+    );
+
+    console.log(
+      "Has session:",
+      hasSession
+    );
+
+    console.log(
+      "Has Salesforce session:",
+      hasSalesforceSession
+    );
+
+    console.log(
+      "Cookie header:",
+      req.headers.cookie
+        ? "PRESENT"
+        : "MISSING"
+    );
+
+    if (hasSalesforceSession) {
+      console.log(
+        "Instance URL:",
+        req.session.salesforce.instanceUrl
+      );
+    }
+
+    console.log(
+      "===================================="
+    );
+
+    return res.json({
+      authenticated:
+        hasSalesforceSession,
+
+      hasSession,
+
+      hasSalesforceSession,
+
+      instanceUrl:
+        req.session?.salesforce?.instanceUrl ||
+        null,
     });
   }
 );
 
-/* =========================================================
-   ROOT
-========================================================= */
-
-app.get(
-  "/",
-  (req, res) => {
-    res.json({
-      application:
-        "Salesforce CRUD Manager",
-
-      status: "running",
-
-      salesforceConfigured:
-        Boolean(
-          CLIENT_ID &&
-          CLIENT_SECRET
-        ),
-
-      frontend:
-        FRONTEND_URL,
-
-      redirectUri:
-        REDIRECT_URI,
-
-      apiVersion:
-        API_VERSION,
-
-      production:
-        IS_PRODUCTION,
-    });
-  }
-);
-
-/* =========================================================
-   LOGIN
-========================================================= */
+// ============================================================
+// SALESFORCE LOGIN
+// ============================================================
 
 app.get(
   "/auth/login",
   (req, res) => {
     try {
-      if (!CLIENT_ID) {
-        return res
-          .status(500)
-          .send(
-            "Salesforce Client ID is not configured."
-          );
-      }
+      const frontend =
+        req.query.frontend ||
+        FRONTEND_URL;
 
-      if (!CLIENT_SECRET) {
-        return res
-          .status(500)
-          .send(
-            "Salesforce Client Secret is not configured."
-          );
-      }
+      // --------------------------------------------------------
+      // Store OAuth information in session
+      // --------------------------------------------------------
 
-      const requestedFrontend =
-        req.query.frontend;
+      req.session.oauthFrontend =
+        frontend;
 
-      const frontendForRedirect =
-        ALLOWED_FRONTENDS.includes(
-          requestedFrontend
-        )
-          ? requestedFrontend
-          : FRONTEND_URL;
+      const state = Buffer.from(
+        JSON.stringify({
+          sessionId:
+            req.sessionID,
 
-      /*
-       * Save the frontend that started OAuth.
-       */
+          frontend,
 
-      req.session.frontendUrl =
-        frontendForRedirect;
-
-      /*
-       * PKCE
-       */
-
-      const codeVerifier =
-        createCodeVerifier();
-
-      const codeChallenge =
-        createCodeChallenge(
-          codeVerifier
-        );
-
-      /*
-       * OAuth state
-       */
-
-      const state =
-        createState();
-
-      req.session.codeVerifier =
-        codeVerifier;
+          timestamp: Date.now(),
+        })
+      ).toString("base64url");
 
       req.session.oauthState =
         state;
 
-      /*
-       * Force session save before
-       * redirecting to Salesforce.
-       */
+      console.log(
+        "===================================="
+      );
+
+      console.log(
+        "STARTING SALESFORCE OAUTH"
+      );
+
+      console.log(
+        "Session ID:",
+        req.sessionID
+      );
+
+      console.log(
+        "Frontend:",
+        frontend
+      );
+
+      console.log(
+        "Callback:",
+        SALESFORCE_CALLBACK_URL
+      );
+
+      console.log(
+        "===================================="
+      );
+
+      // --------------------------------------------------------
+      // IMPORTANT:
+      // Save session before redirecting to Salesforce.
+      // --------------------------------------------------------
 
       req.session.save(
         (saveError) => {
           if (saveError) {
             console.error(
-              "OAuth initial session save error:",
+              "OAuth session save failed:",
               saveError
             );
 
             return res
               .status(500)
-              .send(
-                "Could not initialize OAuth session."
-              );
+              .json({
+                error:
+                  "Could not initialize OAuth session.",
+              });
           }
 
-          const params =
-            new URLSearchParams({
-              response_type: "code",
-
-              client_id:
-                CLIENT_ID,
-
-              redirect_uri:
-                REDIRECT_URI,
-
-              code_challenge:
-                codeChallenge,
-
-              code_challenge_method:
-                "S256",
-
-              state,
-            });
-
           const authorizationUrl =
-            `${SALESFORCE_LOGIN_URL}` +
-            `/services/oauth2/authorize?` +
-            params.toString();
+            new URL(
+              `${SALESFORCE_LOGIN_URL}/services/oauth2/authorize`
+            );
 
-          console.log(
-            "=========================================="
+          authorizationUrl.searchParams.set(
+            "response_type",
+            "code"
+          );
+
+          authorizationUrl.searchParams.set(
+            "client_id",
+            SALESFORCE_CLIENT_ID
+          );
+
+          authorizationUrl.searchParams.set(
+            "redirect_uri",
+            SALESFORCE_CALLBACK_URL
+          );
+
+          authorizationUrl.searchParams.set(
+            "state",
+            state
           );
 
           console.log(
-            "Starting Salesforce OAuth login"
+            "OAuth session saved."
           );
 
           console.log(
-            "Session ID:",
-            req.sessionID
+            "Redirecting to Salesforce..."
           );
 
-          console.log(
-            "Frontend:",
-            frontendForRedirect
-          );
-
-          console.log(
-            "Redirect URI:",
-            REDIRECT_URI
-          );
-
-          console.log(
-            "Production:",
-            IS_PRODUCTION
-          );
-
-          console.log(
-            "=========================================="
-          );
-
-          res.redirect(
-            authorizationUrl
+          return res.redirect(
+            authorizationUrl.toString()
           );
         }
       );
@@ -444,22 +524,52 @@ app.get(
         error
       );
 
-      res
-        .status(500)
-        .send(
-          "OAuth login failed."
-        );
+      return res.status(500).json({
+        error:
+          "Could not start Salesforce login.",
+      });
     }
   }
 );
 
-/* =========================================================
-   OAUTH CALLBACK
-========================================================= */
+// ============================================================
+// SALESFORCE OAUTH CALLBACK
+// ============================================================
 
 app.get(
-  "/oauth/callback",
+  "/auth/callback",
   async (req, res) => {
+    console.log(
+      "===================================="
+    );
+
+    console.log(
+      "SALESFORCE OAUTH CALLBACK"
+    );
+
+    console.log(
+      "Session ID:",
+      req.sessionID
+    );
+
+    console.log(
+      "Cookie header:",
+      req.headers.cookie
+        ? "PRESENT"
+        : "MISSING"
+    );
+
+    console.log(
+      "Has OAuth state:",
+      Boolean(
+        req.session?.oauthState
+      )
+    );
+
+    console.log(
+      "===================================="
+    );
+
     try {
       const {
         code,
@@ -468,27 +578,9 @@ app.get(
         error_description,
       } = req.query;
 
-      console.log(
-        "=========================================="
-      );
-
-      console.log(
-        "OAuth callback received"
-      );
-
-      console.log(
-        "Session ID:",
-        req.sessionID
-      );
-
-      console.log(
-        "Has session:",
-        Boolean(req.session)
-      );
-
-      console.log(
-        "=========================================="
-      );
+      // --------------------------------------------------------
+      // Salesforce OAuth error
+      // --------------------------------------------------------
 
       if (error) {
         console.error(
@@ -497,35 +589,34 @@ app.get(
           error_description
         );
 
-        return res
-          .status(400)
-          .send(
-            `Salesforce OAuth error: ${
-              error_description ||
-              error
-            }`
-          );
+        return res.status(400).send(`
+          <h2>Salesforce Login Failed</h2>
+          <p>${error}</p>
+          <p>${error_description || ""}</p>
+        `);
       }
+
+      // --------------------------------------------------------
+      // Authorization code
+      // --------------------------------------------------------
 
       if (!code) {
-        return res
-          .status(400)
-          .send(
-            "Authorization code missing."
-          );
+        return res.status(400).send(
+          "Missing Salesforce authorization code."
+        );
       }
 
-      /*
-       * Validate OAuth state.
-       */
+      // --------------------------------------------------------
+      // Verify state
+      // --------------------------------------------------------
 
       if (
         !state ||
-        state !==
-          req.session.oauthState
+        !req.session.oauthState ||
+        state !== req.session.oauthState
       ) {
         console.error(
-          "Invalid OAuth state."
+          "OAuth state mismatch."
         );
 
         console.error(
@@ -538,66 +629,18 @@ app.get(
           req.session.oauthState
         );
 
-        return res
-          .status(400)
-          .send(
-            "Invalid OAuth state."
-          );
+        return res.status(400).send(
+          "OAuth session expired or invalid. Please try logging in again."
+        );
       }
 
-      const codeVerifier =
-        req.session.codeVerifier;
-
-      if (!codeVerifier) {
-        return res
-          .status(400)
-          .send(
-            "PKCE code verifier missing from session."
-          );
-      }
-
-      /*
-       * Exchange authorization code
-       * for Salesforce access token.
-       */
-
-      const tokenParams =
-        new URLSearchParams();
-
-      tokenParams.append(
-        "grant_type",
-        "authorization_code"
-      );
-
-      tokenParams.append(
-        "client_id",
-        CLIENT_ID
-      );
-
-      tokenParams.append(
-        "client_secret",
-        CLIENT_SECRET
-      );
-
-      tokenParams.append(
-        "redirect_uri",
-        REDIRECT_URI
-      );
-
-      tokenParams.append(
-        "code",
-        code
-      );
-
-      tokenParams.append(
-        "code_verifier",
-        codeVerifier
-      );
+      // --------------------------------------------------------
+      // Exchange authorization code
+      // --------------------------------------------------------
 
       const tokenResponse =
         await fetch(
-          `${SALESFORCE_LOGIN_URL}` +
-            `/services/oauth2/token`,
+          `${SALESFORCE_LOGIN_URL}/services/oauth2/token`,
           {
             method: "POST",
 
@@ -606,26 +649,38 @@ app.get(
                 "application/x-www-form-urlencoded",
             },
 
-            body:
-              tokenParams.toString(),
+            body: new URLSearchParams({
+              grant_type:
+                "authorization_code",
+
+              code,
+
+              client_id:
+                SALESFORCE_CLIENT_ID,
+
+              client_secret:
+                SALESFORCE_CLIENT_SECRET,
+
+              redirect_uri:
+                SALESFORCE_CALLBACK_URL,
+            }),
           }
         );
 
       const tokenText =
         await tokenResponse.text();
 
-      let tokenData = {};
+      let tokenData;
 
       try {
         tokenData =
           tokenText
-            ? JSON.parse(
-                tokenText
-              )
+            ? JSON.parse(tokenText)
             : {};
       } catch {
         tokenData = {
-          raw: tokenText,
+          error_description:
+            tokenText,
         };
       }
 
@@ -636,33 +691,34 @@ app.get(
         );
 
         return res
-          .status(
-            tokenResponse.status
-          )
-          .json({
-            error:
-              "Salesforce token exchange failed.",
-
-            details:
+          .status(401)
+          .send(`
+            <h2>Salesforce OAuth Failed</h2>
+            <pre>${JSON.stringify(
               tokenData,
-          });
+              null,
+              2
+            )}</pre>
+          `);
       }
 
       if (
         !tokenData.access_token ||
         !tokenData.instance_url
       ) {
-        return res
-          .status(500)
-          .json({
-            error:
-              "Salesforce did not return a valid access token.",
-          });
+        console.error(
+          "Invalid Salesforce token response:",
+          tokenData
+        );
+
+        return res.status(401).send(
+          "Salesforce did not return a valid access token."
+        );
       }
 
-      /*
-       * Store Salesforce session.
-       */
+      // --------------------------------------------------------
+      // Save Salesforce credentials
+      // --------------------------------------------------------
 
       req.session.salesforce = {
         accessToken:
@@ -671,27 +727,27 @@ app.get(
         instanceUrl:
           tokenData.instance_url,
 
-        tokenType:
-          tokenData.token_type ||
-          "Bearer",
+        refreshToken:
+          tokenData.refresh_token ||
+          null,
 
-        issuedAt:
-          Date.now(),
+        issuedAt: Date.now(),
       };
 
-      delete req.session.codeVerifier;
-      delete req.session.oauthState;
-
-      const frontendRedirect =
-        req.session.frontendUrl ||
+      const frontend =
+        req.session.oauthFrontend ||
         FRONTEND_URL;
 
+      delete req.session.oauthState;
+
+      delete req.session.oauthFrontend;
+
       console.log(
-        "=========================================="
+        "===================================="
       );
 
       console.log(
-        "Salesforce OAuth successful"
+        "SALESFORCE OAUTH SUCCESSFUL"
       );
 
       console.log(
@@ -705,8 +761,8 @@ app.get(
       );
 
       console.log(
-        "Frontend after OAuth:",
-        frontendRedirect
+        "Frontend:",
+        frontend
       );
 
       console.log(
@@ -714,28 +770,27 @@ app.get(
       );
 
       console.log(
-        "=========================================="
+        "===================================="
       );
 
-      /*
-       * IMPORTANT:
-       * Explicitly save the session before
-       * redirecting to the frontend.
-       */
+      // --------------------------------------------------------
+      // VERY IMPORTANT
+      //
+      // Do not redirect until the session
+      // has actually been saved.
+      // --------------------------------------------------------
 
       req.session.save(
         (saveError) => {
           if (saveError) {
             console.error(
-              "Session save error:",
+              "Salesforce session save failed:",
               saveError
             );
 
-            return res
-              .status(500)
-              .send(
-                "Could not save Salesforce session."
-              );
+            return res.status(500).send(
+              "Salesforce login succeeded, but the session could not be saved."
+            );
           }
 
           console.log(
@@ -743,16 +798,27 @@ app.get(
           );
 
           console.log(
-            "Session ID:",
+            "Session ID after save:",
             req.sessionID
+          );
+
+          console.log(
+            "Has Salesforce session:",
+            Boolean(
+              req.session.salesforce
+            )
           );
 
           console.log(
             "Redirecting to frontend..."
           );
 
-          res.redirect(
-            frontendRedirect
+          console.log(
+            "===================================="
+          );
+
+          return res.redirect(
+            frontend
           );
         }
       );
@@ -762,116 +828,54 @@ app.get(
         error
       );
 
-      res
-        .status(500)
-        .send(
-          "OAuth callback failed."
-        );
+      return res.status(500).send(`
+        <h2>OAuth callback failed</h2>
+        <p>${error.message}</p>
+      `);
     }
   }
 );
 
-/* =========================================================
-   AUTH STATUS
-========================================================= */
-
-app.get(
-  "/auth/status",
-  (req, res) => {
-    const hasSession =
-      Boolean(req.session);
-
-    const hasSalesforceSession =
-      Boolean(
-        req.session &&
-          req.session.salesforce
-      );
-
-    const authenticated =
-      hasSalesforceSession;
-
-    console.log(
-      "Auth status check:",
-      {
-        sessionId:
-          req.sessionID,
-
-        authenticated,
-
-        hasSession,
-
-        hasSalesforceSession,
-
-        hasCookie:
-          Boolean(
-            req.headers.cookie
-          ),
-      }
-    );
-
-    if (authenticated) {
-      return res.json({
-        authenticated: true,
-
-        instanceUrl:
-          req.session.salesforce
-            .instanceUrl,
-      });
-    }
-
-    return res.json({
-      authenticated: false,
-    });
-  }
-);
-
-/* =========================================================
-   LOGOUT
-========================================================= */
+// ============================================================
+// LOGOUT
+// ============================================================
 
 app.get(
   "/auth/logout",
   (req, res) => {
-    const oldSessionId =
-      req.sessionID;
+    const cookieName =
+      "salesforce.sid";
 
     req.session.destroy(
       (error) => {
         if (error) {
           console.error(
-            "Logout error:",
+            "Session destroy error:",
             error
           );
 
-          return res
-            .status(500)
-            .json({
-              error:
-                "Logout failed.",
-            });
+          return res.status(500).json({
+            error:
+              "Could not log out.",
+          });
         }
 
+        // IMPORTANT:
+        // No domain here either.
         res.clearCookie(
-          "connect.sid",
+          cookieName,
           {
             httpOnly: true,
 
-            secure:
-              IS_PRODUCTION,
+            secure: true,
 
-            sameSite:
-              "none",
+            sameSite: "none",
 
             path: "/",
           }
         );
 
-        console.log(
-          "Session destroyed:",
-          oldSessionId
-        );
-
-        res.json({
+        return res.json({
           success: true,
         });
       }
@@ -879,274 +883,151 @@ app.get(
   }
 );
 
-/* =========================================================
-   AUTH MIDDLEWARE
-========================================================= */
+// ============================================================
+// OBJECT FIELDS
+// ============================================================
 
-function requireSalesforceAuth(
-  req,
-  res,
-  next
-) {
-  if (
-    !req.session ||
-    !req.session.salesforce
-  ) {
-    return res
-      .status(401)
-      .json({
-        error:
-          "Not authenticated with Salesforce.",
-      });
-  }
+const OBJECT_FIELDS = {
+  Account: [
+    "Id",
+    "Name",
+    "Phone",
+    "Website",
+    "Industry",
+    "Type",
+  ],
 
-  next();
-}
+  Opportunity: [
+    "Id",
+    "Name",
+    "Amount",
+    "StageName",
+    "CloseDate",
+    "Type",
+  ],
 
-/* =========================================================
-   ALLOWED OBJECTS
-========================================================= */
+  Lead: [
+    "Id",
+    "FirstName",
+    "LastName",
+    "Company",
+    "Email",
+    "Phone",
+  ],
 
-const allowedObjects = [
-  "Account",
-  "Opportunity",
-  "Lead",
-  "Contact",
-  "Case",
-];
+  Contact: [
+    "Id",
+    "FirstName",
+    "LastName",
+    "Email",
+    "Phone",
+    "Department",
+  ],
 
-/* =========================================================
-   FIELDS
-========================================================= */
-
-const fieldMap = {
-  Account:
-    "Id,Name,Phone,Website,Industry,Type",
-
-  Opportunity:
-    "Id,Name,Amount,StageName,CloseDate,Type",
-
-  Lead:
-    "Id,FirstName,LastName,Company,Email,Phone",
-
-  Contact:
-    "Id,FirstName,LastName,Email,Phone,Department",
-
-  Case:
-    "Id,Subject,Status,Priority,Origin,Description",
+  Case: [
+    "Id",
+    "Subject",
+    "Status",
+    "Priority",
+    "Origin",
+    "Description",
+  ],
 };
 
-/* =========================================================
-   SALESFORCE SESSION HELPER
-========================================================= */
+const ALLOWED_OBJECTS =
+  Object.keys(OBJECT_FIELDS);
 
-function getSalesforceSession(req) {
-  if (
-    !req.session ||
-    !req.session.salesforce
-  ) {
-    return null;
-  }
-
-  return req.session.salesforce;
-}
-
-/* =========================================================
-   GET RECORDS
-   20 RECORDS PER REQUEST
-========================================================= */
+// ============================================================
+// GET RECORDS
+// ============================================================
 
 app.get(
-  "/api/records/:objectName",
-  requireSalesforceAuth,
+  "/api/records/:object",
+  requireSalesforceSession,
   async (req, res) => {
     try {
-      const {
-        objectName,
-      } = req.params;
+      const objectName =
+        req.params.object;
 
       if (
-        !allowedObjects.includes(
+        !ALLOWED_OBJECTS.includes(
           objectName
         )
       ) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Invalid Salesforce object.",
-          });
+        return res.status(400).json({
+          error:
+            "Invalid Salesforce object.",
+        });
       }
 
-      const requestedPage =
-        parseInt(
-          req.query.page || "1",
-          10
-        );
+      let page =
+        Number(req.query.page) || 1;
 
-      const page =
-        Number.isFinite(
-          requestedPage
-        ) &&
-        requestedPage >= 1
-          ? requestedPage
-          : 1;
-
-      /*
-       * EXACTLY 20 RECORDS PER REQUEST.
-       */
+      if (page < 1) {
+        page = 1;
+      }
 
       const pageSize = 20;
 
       const offset =
-        (page - 1) *
-        pageSize;
+        (page - 1) * pageSize;
 
-      const salesforce =
-        getSalesforceSession(req);
-
-      if (!salesforce) {
-        return res
-          .status(401)
-          .json({
-            error:
-              "Salesforce session expired.",
-          });
-      }
-
-      const {
-        accessToken,
-        instanceUrl,
-      } = salesforce;
-
-      /*
-       * Get total count.
-       */
-
-      const countQuery =
-        `SELECT COUNT() ` +
-        `FROM ${objectName}`;
-
-      const countUrl =
-        `${instanceUrl}` +
-        `/services/data/${API_VERSION}` +
-        `/query/?q=` +
-        encodeURIComponent(
-          countQuery
-        );
-
-      const countResponse =
-        await fetch(countUrl, {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
+      if (offset > 2000) {
+        return res.status(400).json({
+          error:
+            "Salesforce OFFSET limit reached. Use cursor pagination for datasets larger than 2,000 records.",
         });
-
-      const countText =
-        await countResponse.text();
-
-      let countData = {};
-
-      try {
-        countData =
-          countText
-            ? JSON.parse(
-                countText
-              )
-            : {};
-      } catch {
-        countData = {};
       }
 
-      if (!countResponse.ok) {
-        return res
-          .status(
-            countResponse.status
-          )
-          .json({
-            error:
-              "Failed to count Salesforce records.",
+      const fields =
+        OBJECT_FIELDS[
+          objectName
+        ].join(", ");
 
-            details:
-              countData,
-          });
-      }
-
-      const totalSize =
-        Number(
-          countData.totalSize || 0
-        );
-
-      /*
-       * Get only 20 records.
-       */
-
-      const query =
-        `SELECT ${fieldMap[objectName]} ` +
-        `FROM ${objectName} ` +
-        `ORDER BY CreatedDate DESC, Id ASC ` +
-        `LIMIT ${pageSize} ` +
-        `OFFSET ${offset}`;
+      const query = `
+        SELECT ${fields}
+        FROM ${objectName}
+        ORDER BY CreatedDate DESC, Id DESC
+        LIMIT ${pageSize}
+        OFFSET ${offset}
+      `.replace(/\s+/g, " ");
 
       console.log(
-        `${objectName}: loading page ${page}, offset ${offset}, limit ${pageSize}`
+        `Loading ${objectName} page ${page}`
       );
 
-      const url =
-        `${instanceUrl}` +
-        `/services/data/${API_VERSION}` +
-        `/query/?q=` +
-        encodeURIComponent(query);
-
-      const response =
-        await fetch(url, {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
-        });
-
-      const text =
-        await response.text();
-
-      let data = {};
-
-      try {
-        data =
-          text
-            ? JSON.parse(
-                text
-              )
-            : {};
-      } catch {
-        data = {};
-      }
+      const {
+        response,
+        data,
+      } =
+        await salesforceRequest(
+          req,
+          `/query?q=${encodeURIComponent(
+            query
+          )}`
+        );
 
       if (!response.ok) {
-        return res
-          .status(response.status)
-          .json({
-            error:
-              "Failed to load Salesforce records.",
-
-            details:
-              data,
-          });
+        return sendSalesforceError(
+          res,
+          response,
+          data
+        );
       }
 
       const records =
         data.records || [];
 
+      const totalSize =
+        Number(
+          data.totalSize || 0
+        );
+
       const hasMore =
-        offset +
-          records.length <
+        offset + records.length <
         totalSize;
 
       return res.json({
-        object:
-          objectName,
-
         records,
 
         totalSize,
@@ -1156,11 +1037,6 @@ app.get(
         pageSize,
 
         hasMore,
-
-        nextPage:
-          hasMore
-            ? page + 1
-            : null,
       });
     } catch (error) {
       console.error(
@@ -1168,389 +1044,306 @@ app.get(
         error
       );
 
-      res
-        .status(500)
-        .json({
-          error:
-            "Could not load Salesforce records.",
+      return res.status(500).json({
+        error:
+          "Failed to load Salesforce records.",
 
-          details:
-            error.message,
-        });
+        details: error.message,
+      });
     }
   }
 );
 
-/* =========================================================
-   CREATE
-========================================================= */
+// ============================================================
+// CREATE
+// ============================================================
 
 app.post(
-  "/api/records/:objectName",
-  requireSalesforceAuth,
+  "/api/records/:object",
+  requireSalesforceSession,
   async (req, res) => {
     try {
-      const {
-        objectName,
-      } = req.params;
+      const objectName =
+        req.params.object;
 
       if (
-        !allowedObjects.includes(
+        !ALLOWED_OBJECTS.includes(
           objectName
         )
       ) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Invalid Salesforce object.",
-          });
+        return res.status(400).json({
+          error:
+            "Invalid Salesforce object.",
+        });
       }
 
-      const salesforce =
-        getSalesforceSession(req);
+      const fields =
+        OBJECT_FIELDS[
+          objectName
+        ].filter(
+          (field) =>
+            field !== "Id"
+        );
+
+      const payload = {};
+
+      fields.forEach(
+        (field) => {
+          if (
+            req.body[field] !==
+              undefined &&
+            req.body[field] !==
+              null &&
+            req.body[field] !==
+              ""
+          ) {
+            payload[field] =
+              req.body[field];
+          }
+        }
+      );
 
       const {
-        accessToken,
-        instanceUrl,
-      } = salesforce;
+        response,
+        data,
+      } =
+        await salesforceRequest(
+          req,
+          `/sobjects/${objectName}`,
+          {
+            method: "POST",
 
-      const url =
-        `${instanceUrl}` +
-        `/services/data/${API_VERSION}` +
-        `/sobjects/${objectName}`;
-
-      const response =
-        await fetch(url, {
-          method: "POST",
-
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify(
-            req.body
-          ),
-        });
-
-      const text =
-        await response.text();
-
-      let data = {};
-
-      try {
-        data =
-          text
-            ? JSON.parse(
-                text
-              )
-            : {};
-      } catch {
-        data = {
-          message: text,
-        };
-      }
+            body: JSON.stringify(
+              payload
+            ),
+          }
+        );
 
       if (!response.ok) {
-        return res
-          .status(response.status)
-          .json({
-            error:
-              "Failed to create Salesforce record.",
-
-            details:
-              data,
-          });
+        return sendSalesforceError(
+          res,
+          response,
+          data
+        );
       }
 
-      res
-        .status(201)
-        .json({
-          success: true,
-
-          id: data.id,
-
-          message:
-            `${objectName} created successfully.`,
-        });
+      return res.status(201).json(
+        data
+      );
     } catch (error) {
       console.error(
-        "Create error:",
+        "Create record error:",
         error
       );
 
-      res
-        .status(500)
-        .json({
-          error:
-            "Could not create Salesforce record.",
+      return res.status(500).json({
+        error:
+          "Failed to create Salesforce record.",
 
-          details:
-            error.message,
-        });
+        details: error.message,
+      });
     }
   }
 );
 
-/* =========================================================
-   UPDATE
-========================================================= */
+// ============================================================
+// UPDATE
+// ============================================================
 
 app.patch(
-  "/api/records/:objectName/:recordId",
-  requireSalesforceAuth,
+  "/api/records/:object/:id",
+  requireSalesforceSession,
   async (req, res) => {
     try {
-      const {
-        objectName,
-        recordId,
-      } = req.params;
+      const objectName =
+        req.params.object;
+
+      const recordId =
+        req.params.id;
 
       if (
-        !allowedObjects.includes(
+        !ALLOWED_OBJECTS.includes(
           objectName
         )
       ) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Invalid Salesforce object.",
-          });
+        return res.status(400).json({
+          error:
+            "Invalid Salesforce object.",
+        });
       }
 
       if (!recordId) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Record ID is required.",
-          });
+        return res.status(400).json({
+          error:
+            "Record ID is required.",
+        });
       }
 
-      const salesforce =
-        getSalesforceSession(req);
+      const fields =
+        OBJECT_FIELDS[
+          objectName
+        ].filter(
+          (field) =>
+            field !== "Id"
+        );
+
+      const payload = {};
+
+      fields.forEach(
+        (field) => {
+          if (
+            req.body[field] !==
+              undefined &&
+            req.body[field] !==
+              null &&
+            req.body[field] !==
+              ""
+          ) {
+            payload[field] =
+              req.body[field];
+          }
+        }
+      );
 
       const {
-        accessToken,
-        instanceUrl,
-      } = salesforce;
+        response,
+        data,
+      } =
+        await salesforceRequest(
+          req,
+          `/sobjects/${objectName}/${encodeURIComponent(
+            recordId
+          )}`,
+          {
+            method: "PATCH",
 
-      const url =
-        `${instanceUrl}` +
-        `/services/data/${API_VERSION}` +
-        `/sobjects/${objectName}/${recordId}`;
-
-      const response =
-        await fetch(url, {
-          method: "PATCH",
-
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify(
-            req.body
-          ),
-        });
-
-      const text =
-        await response.text();
-
-      let data = {};
-
-      try {
-        data =
-          text
-            ? JSON.parse(
-                text
-              )
-            : {};
-      } catch {
-        data = {
-          message: text,
-        };
-      }
+            body: JSON.stringify(
+              payload
+            ),
+          }
+        );
 
       if (!response.ok) {
-        return res
-          .status(response.status)
-          .json({
-            error:
-              "Failed to update Salesforce record.",
-
-            details:
-              data,
-          });
+        return sendSalesforceError(
+          res,
+          response,
+          data
+        );
       }
 
-      res.json({
+      return res.json({
         success: true,
 
         id: recordId,
-
-        message:
-          `${objectName} updated successfully.`,
       });
     } catch (error) {
       console.error(
-        "Update error:",
+        "Update record error:",
         error
       );
 
-      res
-        .status(500)
-        .json({
-          error:
-            "Could not update Salesforce record.",
+      return res.status(500).json({
+        error:
+          "Failed to update Salesforce record.",
 
-          details:
-            error.message,
-        });
+        details: error.message,
+      });
     }
   }
 );
 
-/* =========================================================
-   DELETE
-========================================================= */
+// ============================================================
+// DELETE
+// ============================================================
 
 app.delete(
-  "/api/records/:objectName/:recordId",
-  requireSalesforceAuth,
+  "/api/records/:object/:id",
+  requireSalesforceSession,
   async (req, res) => {
     try {
-      const {
-        objectName,
-        recordId,
-      } = req.params;
+      const objectName =
+        req.params.object;
+
+      const recordId =
+        req.params.id;
 
       if (
-        !allowedObjects.includes(
+        !ALLOWED_OBJECTS.includes(
           objectName
         )
       ) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Invalid Salesforce object.",
-          });
+        return res.status(400).json({
+          error:
+            "Invalid Salesforce object.",
+        });
       }
 
       if (!recordId) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Record ID is required.",
-          });
+        return res.status(400).json({
+          error:
+            "Record ID is required.",
+        });
       }
-
-      const salesforce =
-        getSalesforceSession(req);
 
       const {
-        accessToken,
-        instanceUrl,
-      } = salesforce;
-
-      const url =
-        `${instanceUrl}` +
-        `/services/data/${API_VERSION}` +
-        `/sobjects/${objectName}/${recordId}`;
-
-      const response =
-        await fetch(url, {
-          method: "DELETE",
-
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
-        });
-
-      const text =
-        await response.text();
+        response,
+        data,
+      } =
+        await salesforceRequest(
+          req,
+          `/sobjects/${objectName}/${encodeURIComponent(
+            recordId
+          )}`,
+          {
+            method: "DELETE",
+          }
+        );
 
       if (!response.ok) {
-        let data = {};
-
-        try {
-          data =
-            text
-              ? JSON.parse(text)
-              : {};
-        } catch {
-          data = {
-            message: text,
-          };
-        }
-
-        return res
-          .status(response.status)
-          .json({
-            error:
-              "Failed to delete Salesforce record.",
-
-            details:
-              data,
-          });
+        return sendSalesforceError(
+          res,
+          response,
+          data
+        );
       }
 
-      res.json({
+      return res.json({
         success: true,
 
         id: recordId,
-
-        message:
-          `${objectName} deleted successfully.`,
       });
     } catch (error) {
       console.error(
-        "Delete error:",
+        "Delete record error:",
         error
       );
 
-      res
-        .status(500)
-        .json({
-          error:
-            "Could not delete Salesforce record.",
+      return res.status(500).json({
+        error:
+          "Failed to delete Salesforce record.",
 
-          details:
-            error.message,
-        });
+        details: error.message,
+      });
     }
   }
 );
 
-/* =========================================================
-   404
-========================================================= */
+// ============================================================
+// 404
+// ============================================================
 
 app.use(
   (req, res) => {
-    res
-      .status(404)
-      .json({
-        error:
-          "Route not found.",
-      });
+    res.status(404).json({
+      error:
+        "Route not found.",
+    });
   }
 );
 
-/* =========================================================
-   ERROR HANDLER
-========================================================= */
+// ============================================================
+// ERROR HANDLER
+// ============================================================
 
 app.use(
   (
@@ -1564,71 +1357,62 @@ app.use(
       error
     );
 
-    res
-      .status(500)
-      .json({
-        error:
-          "Internal server error.",
-
-        details:
-          error.message,
-      });
+    res.status(500).json({
+      error:
+        "Internal server error.",
+    });
   }
 );
 
-/* =========================================================
-   START
-========================================================= */
+// ============================================================
+// START SERVER
+// ============================================================
 
 app.listen(
   PORT,
   () => {
     console.log(
-      "=========================================="
+      "===================================="
     );
 
     console.log(
-      "Salesforce CRUD Manager Backend"
+      "Salesforce CRUD backend started"
     );
 
     console.log(
-      `Server running on port ${PORT}`
+      "Port:",
+      PORT
     );
 
     console.log(
-      `Frontend: ${FRONTEND_URL}`
+      "Frontend:",
+      FRONTEND_URL
     );
 
     console.log(
-      `OAuth callback: ${REDIRECT_URI}`
+      "Callback:",
+      SALESFORCE_CALLBACK_URL
     );
 
     console.log(
-      `Salesforce API: ${API_VERSION}`
+      "Session cookie: HOST-ONLY"
     );
 
     console.log(
-      `Production: ${IS_PRODUCTION}`
+      "SameSite: none"
     );
 
     console.log(
-      "Pagination: 20 records per request"
+      "Secure: true"
     );
 
     console.log(
-      "Session cookie: connect.sid"
+      "Salesforce API:",
+      SALESFORCE_API_VERSION
     );
 
     console.log(
-      "Salesforce configured:",
-      Boolean(
-        CLIENT_ID &&
-        CLIENT_SECRET
-      )
-    );
-
-    console.log(
-      "=========================================="
+      "===================================="
     );
   }
 );
