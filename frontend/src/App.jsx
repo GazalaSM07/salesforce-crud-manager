@@ -9,6 +9,10 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://salesforce-crud-backend-rffk.onrender.com";
 
+/* =========================================================
+   SALESFORCE OBJECTS
+========================================================= */
+
 const OBJECTS = [
   "Account",
   "Opportunity",
@@ -17,7 +21,9 @@ const OBJECTS = [
   "Case",
 ];
 
-const PAGE_SIZE = 20;
+/* =========================================================
+   OBJECT METADATA
+========================================================= */
 
 const OBJECT_META = {
   Account: {
@@ -55,6 +61,10 @@ const OBJECT_META = {
     description: "Manage customer support cases",
   },
 };
+
+/* =========================================================
+   DISPLAY FIELDS
+========================================================= */
 
 const FIELD_MAP = {
   Account: [
@@ -103,6 +113,10 @@ const FIELD_MAP = {
   ],
 };
 
+/* =========================================================
+   CREATE / EDIT FIELDS
+========================================================= */
+
 const CREATE_FIELDS = {
   Account: [
     "Name",
@@ -145,6 +159,10 @@ const CREATE_FIELDS = {
   ],
 };
 
+/* =========================================================
+   LABELS
+========================================================= */
+
 const LABELS = {
   Id: "ID",
   Name: "Name",
@@ -171,6 +189,10 @@ function getLabel(field) {
   return LABELS[field] || field;
 }
 
+/* =========================================================
+   FORMAT VALUE
+========================================================= */
+
 function formatValue(value) {
   if (
     value === null ||
@@ -183,15 +205,41 @@ function formatValue(value) {
   return String(value);
 }
 
+/* =========================================================
+   INPUT TYPE
+========================================================= */
+
 function getInputType(field) {
-  if (field === "Amount") return "number";
-  if (field === "CloseDate") return "date";
-  if (field === "Email") return "email";
-  if (field === "Website") return "url";
-  if (field === "Description") return "textarea";
+  if (field === "Amount") {
+    return "number";
+  }
+
+  if (field === "CloseDate") {
+    return "date";
+  }
+
+  if (field === "Email") {
+    return "email";
+  }
+
+  if (field === "Website") {
+    return "url";
+  }
+
+  if (field === "Description") {
+    return "textarea";
+  }
+
+  if (field === "Phone") {
+    return "tel";
+  }
 
   return "text";
 }
+
+/* =========================================================
+   INITIALS
+========================================================= */
 
 function getInitials(record, objectName) {
   if (objectName === "Account") {
@@ -233,8 +281,14 @@ function getInitials(record, objectName) {
   return "SF";
 }
 
+/* =========================================================
+   BADGES
+========================================================= */
+
 function getBadgeClass(field, value) {
-  if (!value) return "";
+  if (!value) {
+    return "";
+  }
 
   const normalized =
     String(value).toLowerCase();
@@ -295,6 +349,10 @@ function getBadgeClass(field, value) {
   return "";
 }
 
+/* =========================================================
+   CLEAN PAYLOAD
+========================================================= */
+
 function cleanPayload(data) {
   const result = {};
 
@@ -313,6 +371,10 @@ function cleanPayload(data) {
   return result;
 }
 
+/* =========================================================
+   SALESFORCE ERROR
+========================================================= */
+
 function getSalesforceError(data) {
   if (!data) {
     return "Salesforce request failed.";
@@ -321,7 +383,9 @@ function getSalesforceError(data) {
   if (Array.isArray(data.details)) {
     return data.details
       .map((item) => {
-        if (typeof item === "string") {
+        if (
+          typeof item === "string"
+        ) {
           return item;
         }
 
@@ -348,26 +412,31 @@ function getSalesforceError(data) {
   );
 }
 
+/* =========================================================
+   APP
+========================================================= */
+
 function App() {
+  /* =======================================================
+     AUTH
+  ======================================================= */
+
   const [authenticated, setAuthenticated] =
     useState(false);
 
   const [checkingAuth, setCheckingAuth] =
     useState(true);
 
+  /* =======================================================
+     OBJECT
+  ======================================================= */
+
   const [objectName, setObjectName] =
     useState("Account");
 
-  /*
-   * PAGINATION
-   *
-   * page = currently loaded Salesforce page.
-   *
-   * Example:
-   * page 1 = records 1-20
-   * page 2 = records 21-40
-   * page 3 = records 41-60
-   */
+  /* =======================================================
+     RECORDS
+  ======================================================= */
 
   const [records, setRecords] =
     useState([]);
@@ -381,18 +450,9 @@ function App() {
   const [hasMore, setHasMore] =
     useState(false);
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [loadingMore, setLoadingMore] =
-    useState(false);
-
-  /*
-   * Prevent multiple simultaneous
-   * pagination requests.
-   */
-  const loadingMoreRef =
-    useRef(false);
+  /* =======================================================
+     OBJECT COUNTS
+  ======================================================= */
 
   const [objectCounts, setObjectCounts] =
     useState({
@@ -406,11 +466,29 @@ function App() {
   const [loadingCounts, setLoadingCounts] =
     useState(false);
 
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [loadingMore, setLoadingMore] =
+    useState(false);
+
+  /* =======================================================
+     MESSAGES
+  ======================================================= */
+
   const [error, setError] =
     useState("");
 
   const [successMessage, setSuccessMessage] =
     useState("");
+
+  /* =======================================================
+     MODALS
+  ======================================================= */
 
   const [modal, setModal] =
     useState(null);
@@ -421,28 +499,32 @@ function App() {
   const [formData, setFormData] =
     useState({});
 
+  /* =======================================================
+     CRUD LOADING
+  ======================================================= */
+
   const [saving, setSaving] =
     useState(false);
 
   const [deleting, setDeleting] =
     useState(false);
 
+  /* =======================================================
+     SEARCH
+  ======================================================= */
+
   const [searchTerm, setSearchTerm] =
     useState("");
 
-  /*
-   * IMPORTANT:
-   *
-   * This is the actual element that scrolls.
-   *
-   * The IntersectionObserver will use this
-   * element as its root.
-   */
-  const tableWrapperRef =
-    useRef(null);
+  /* =======================================================
+     INFINITE SCROLL
+  ======================================================= */
 
-  const loaderRef =
-    useRef(null);
+  const loaderRef = useRef(null);
+
+  /* =======================================================
+     CURRENT OBJECT DATA
+  ======================================================= */
 
   const currentMeta =
     OBJECT_META[objectName];
@@ -450,63 +532,95 @@ function App() {
   const fields =
     FIELD_MAP[objectName];
 
+  /* =======================================================
+     SUCCESS MESSAGE AUTO HIDE
+  ======================================================= */
+
   useEffect(() => {
     if (!successMessage) {
       return;
     }
 
-    const timer =
-      setTimeout(() => {
-        setSuccessMessage("");
-      }, 4000);
+    const timer = setTimeout(() => {
+      setSuccessMessage("");
+    }, 4000);
 
     return () =>
       clearTimeout(timer);
   }, [successMessage]);
 
-  /*
-   * ==========================================
-   * AUTH CHECK
-   * ==========================================
-   */
+  /* =======================================================
+     CHECK AUTHENTICATION
+  ======================================================= */
 
-  const checkAuth =
-    useCallback(async () => {
+  const checkAuth = useCallback(
+    async () => {
       try {
         setCheckingAuth(true);
+
+        /*
+         * Give the browser a moment to restore
+         * the Salesforce session cookie after
+         * the OAuth redirect.
+         */
+        await new Promise((resolve) =>
+          setTimeout(resolve, 500)
+        );
 
         const response =
           await fetch(
             `${API_URL}/auth/status`,
             {
+              method: "GET",
+
               credentials: "include",
+
+              cache: "no-store",
             }
           );
 
+        if (!response.ok) {
+          throw new Error(
+            `Auth status request failed: ${response.status}`
+          );
+        }
+
         const data =
           await response.json();
+
+        console.log(
+          "Salesforce authentication status:",
+          data
+        );
 
         setAuthenticated(
           Boolean(data.authenticated)
         );
       } catch (err) {
-        console.error(err);
+        console.error(
+          "Authentication check failed:",
+          err
+        );
 
         setAuthenticated(false);
       } finally {
         setCheckingAuth(false);
       }
-    }, []);
+    },
+    []
+  );
+
+  /* =======================================================
+     INITIAL AUTH CHECK
+  ======================================================= */
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  /*
-   * ==========================================
-   * OBJECT COUNTS
-   * ==========================================
-   */
+  /* =======================================================
+     LOAD OBJECT COUNTS
+  ======================================================= */
 
   const loadObjectCounts =
     useCallback(async () => {
@@ -524,6 +638,9 @@ function App() {
                       {
                         credentials:
                           "include",
+
+                        cache:
+                          "no-store",
                       }
                     );
 
@@ -563,15 +680,14 @@ function App() {
         );
 
         setObjectCounts(counts);
-      } catch (err) {
-        console.error(
-          "Count loading error:",
-          err
-        );
       } finally {
         setLoadingCounts(false);
       }
     }, []);
+
+  /* =======================================================
+     LOAD COUNTS AFTER AUTH
+  ======================================================= */
 
   useEffect(() => {
     if (!authenticated) {
@@ -584,22 +700,9 @@ function App() {
     loadObjectCounts,
   ]);
 
-  /*
-   * ==========================================
-   * LOAD RECORDS
-   * ==========================================
-   *
-   * requestedPage:
-   *
-   * 1 -> first 20
-   * 2 -> next 20
-   * 3 -> next 20
-   *
-   * append:
-   *
-   * false -> replace records
-   * true  -> append records
-   */
+  /* =======================================================
+     LOAD RECORDS
+  ======================================================= */
 
   const loadRecords =
     useCallback(
@@ -607,22 +710,8 @@ function App() {
         requestedPage = 1,
         append = false
       ) => {
-        /*
-         * Do not allow two "load more"
-         * requests at the same time.
-         */
-        if (
-          append &&
-          loadingMoreRef.current
-        ) {
-          return;
-        }
-
         try {
           if (append) {
-            loadingMoreRef.current =
-              true;
-
             setLoadingMore(true);
           } else {
             setLoading(true);
@@ -630,16 +719,17 @@ function App() {
 
           setError("");
 
-          console.log(
-            `[Pagination] Loading ${objectName} page ${requestedPage}`
-          );
-
           const response =
             await fetch(
               `${API_URL}/api/records/${objectName}?page=${requestedPage}`,
               {
+                method: "GET",
+
                 credentials:
                   "include",
+
+                cache:
+                  "no-store",
               }
             );
 
@@ -648,53 +738,27 @@ function App() {
 
           if (!response.ok) {
             throw new Error(
-              getSalesforceError(data)
+              getSalesforceError(
+                data
+              )
             );
           }
 
           const incomingRecords =
             data.records || [];
 
-          console.log(
-            `[Pagination] Received ${incomingRecords.length} records`
-          );
-
-          console.log(
-            `[Pagination] Total Salesforce records: ${data.totalSize}`
-          );
-
-          console.log(
-            `[Pagination] Has more: ${data.hasMore}`
-          );
-
+          /*
+           * First request replaces records.
+           *
+           * Subsequent requests append
+           * the next 20 records.
+           */
           if (append) {
             setRecords(
-              (previous) => {
-                /*
-                 * Protect against accidental
-                 * duplicate records.
-                 */
-                const existingIds =
-                  new Set(
-                    previous.map(
-                      (item) =>
-                        item.Id
-                    )
-                  );
-
-                const newRecords =
-                  incomingRecords.filter(
-                    (item) =>
-                      !existingIds.has(
-                        item.Id
-                      )
-                  );
-
-                return [
-                  ...previous,
-                  ...newRecords,
-                ];
-              }
+              (previous) => [
+                ...previous,
+                ...incomingRecords,
+              ]
             );
           } else {
             setRecords(
@@ -753,21 +817,15 @@ function App() {
           );
         } finally {
           setLoading(false);
-
           setLoadingMore(false);
-
-          loadingMoreRef.current =
-            false;
         }
       },
       [objectName]
     );
 
-  /*
-   * ==========================================
-   * RESET WHEN OBJECT CHANGES
-   * ==========================================
-   */
+  /* =======================================================
+     LOAD FIRST 20 WHEN OBJECT CHANGES
+  ======================================================= */
 
   useEffect(() => {
     if (!authenticated) {
@@ -780,18 +838,7 @@ function App() {
 
     setHasMore(false);
 
-    setTotalSize(0);
-
     setSearchTerm("");
-
-    /*
-     * Reset scroll position.
-     */
-    if (
-      tableWrapperRef.current
-    ) {
-      tableWrapperRef.current.scrollTop = 0;
-    }
 
     loadRecords(1, false);
   }, [
@@ -800,28 +847,15 @@ function App() {
     loadRecords,
   ]);
 
-  /*
-   * ==========================================
-   * INFINITE SCROLL
-   * ==========================================
-   *
-   * THIS IS THE IMPORTANT FIX.
-   *
-   * The observer root is the table
-   * scroll container.
-   *
-   * Previously the observer watched the
-   * browser/page instead of the table.
-   */
+  /* =======================================================
+     INFINITE SCROLL
+  ======================================================= */
 
   useEffect(() => {
-    const scrollContainer =
-      tableWrapperRef.current;
-
-    const loader =
+    const element =
       loaderRef.current;
 
-    if (!scrollContainer || !loader) {
+    if (!element) {
       return;
     }
 
@@ -837,59 +871,45 @@ function App() {
 
           if (
             entry.isIntersecting &&
-            hasMore &&
-            !loading &&
-            !loadingMoreRef.current
+            !loadingMore &&
+            !loading
           ) {
+            const nextPage =
+              page + 1;
+
             console.log(
-              `[Infinite Scroll] Loading page ${
-                page + 1
-              }`
+              `Loading page ${nextPage} - next 20 records`
             );
 
             loadRecords(
-              page + 1,
+              nextPage,
               true
             );
           }
         },
         {
-          /*
-           * VERY IMPORTANT
-           *
-           * Observe relative to the
-           * scrolling table container.
-           */
-          root: scrollContainer,
-
-          /*
-           * Start loading slightly before
-           * the user reaches the absolute
-           * bottom.
-           */
           rootMargin:
-            "0px 0px 250px 0px",
+            "300px",
 
           threshold: 0,
         }
       );
 
-    observer.observe(loader);
+    observer.observe(element);
 
     return () =>
       observer.disconnect();
   }, [
     hasMore,
+    loadingMore,
     loading,
     page,
     loadRecords,
   ]);
 
-  /*
-   * ==========================================
-   * LOGIN
-   * ==========================================
-   */
+  /* =======================================================
+     LOGIN
+  ======================================================= */
 
   function login() {
     const frontendUrl =
@@ -901,34 +921,43 @@ function App() {
       )}`;
   }
 
-  /*
-   * ==========================================
-   * LOGOUT
-   * ==========================================
-   */
+  /* =======================================================
+     LOGOUT
+  ======================================================= */
 
   async function logout() {
     try {
       await fetch(
         `${API_URL}/auth/logout`,
         {
-          credentials: "include",
+          method: "GET",
+
+          credentials:
+            "include",
+
+          cache:
+            "no-store",
         }
       );
     } catch (err) {
-      console.error(err);
+      console.error(
+        "Logout error:",
+        err
+      );
     }
 
     setAuthenticated(false);
 
     setRecords([]);
+
+    setPage(0);
+
+    setHasMore(false);
   }
 
-  /*
-   * ==========================================
-   * OBJECT CHANGE
-   * ==========================================
-   */
+  /* =======================================================
+     CHANGE OBJECT
+  ======================================================= */
 
   function changeObject(event) {
     setObjectName(
@@ -940,30 +969,15 @@ function App() {
     setSearchTerm("");
   }
 
-  /*
-   * ==========================================
-   * REFRESH
-   * ==========================================
-   */
+  /* =======================================================
+     REFRESH
+  ======================================================= */
 
   async function refreshRecords() {
-    setRecords([]);
-
-    setPage(0);
-
-    setHasMore(false);
-
-    setTotalSize(0);
-
-    setSearchTerm("");
-
-    if (
-      tableWrapperRef.current
-    ) {
-      tableWrapperRef.current.scrollTop = 0;
-    }
-
-    await loadRecords(1, false);
+    await loadRecords(
+      1,
+      false
+    );
 
     await loadObjectCounts();
 
@@ -972,11 +986,9 @@ function App() {
     );
   }
 
-  /*
-   * ==========================================
-   * CREATE
-   * ==========================================
-   */
+  /* =======================================================
+     CREATE MODAL
+  ======================================================= */
 
   function openCreate() {
     const fieldsToCreate =
@@ -1001,11 +1013,9 @@ function App() {
     setError("");
   }
 
-  /*
-   * ==========================================
-   * VIEW
-   * ==========================================
-   */
+  /* =======================================================
+     VIEW MODAL
+  ======================================================= */
 
   function openView(record) {
     setSelectedRecord(record);
@@ -1015,11 +1025,9 @@ function App() {
     setError("");
   }
 
-  /*
-   * ==========================================
-   * EDIT
-   * ==========================================
-   */
+  /* =======================================================
+     EDIT MODAL
+  ======================================================= */
 
   function openEdit(record) {
     const fieldsToEdit =
@@ -1045,11 +1053,9 @@ function App() {
     setError("");
   }
 
-  /*
-   * ==========================================
-   * CLOSE MODAL
-   * ==========================================
-   */
+  /* =======================================================
+     CLOSE MODAL
+  ======================================================= */
 
   function closeModal() {
     if (
@@ -1066,35 +1072,24 @@ function App() {
     setFormData({});
   }
 
-  /*
-   * ==========================================
-   * INPUT CHANGE
-   * ==========================================
-   */
+  /* =======================================================
+     INPUT CHANGE
+  ======================================================= */
 
   function handleInputChange(
     field,
     value
   ) {
     /*
-     * PHONE FIX
-     *
-     * Only allow numbers.
-     *
-     * Example:
-     *
-     * 987abc123
-     *
-     * becomes:
-     *
-     * 987123
+     * Phone field:
+     * Allow digits and common phone
+     * symbols only.
      */
     if (field === "Phone") {
-      value =
-        value.replace(
-          /\D/g,
-          ""
-        );
+      value = value.replace(
+        /[^0-9+\-() ]/g,
+        ""
+      );
     }
 
     setFormData(
@@ -1105,11 +1100,9 @@ function App() {
     );
   }
 
-  /*
-   * ==========================================
-   * CREATE RECORD
-   * ==========================================
-   */
+  /* =======================================================
+     CREATE RECORD
+  ======================================================= */
 
   async function createRecord(
     event
@@ -1161,18 +1154,9 @@ function App() {
       );
 
       /*
-       * New record can change the
-       * first page because records are
-       * sorted by CreatedDate DESC.
-       *
-       * Therefore reset to page 1.
+       * Reload first 20 records
+       * after creating a record.
        */
-      setRecords([]);
-
-      setPage(0);
-
-      setHasMore(false);
-
       await loadRecords(
         1,
         false
@@ -1180,17 +1164,22 @@ function App() {
 
       await loadObjectCounts();
     } catch (err) {
-      setError(err.message);
+      console.error(
+        "Create error:",
+        err
+      );
+
+      setError(
+        err.message
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  /*
-   * ==========================================
-   * UPDATE RECORD
-   * ==========================================
-   */
+  /* =======================================================
+     UPDATE RECORD
+  ======================================================= */
 
   async function updateRecord(
     event
@@ -1250,15 +1239,8 @@ function App() {
       );
 
       /*
-       * Reload currently from page 1
-       * to keep sorting consistent.
+       * Reload first page after update.
        */
-      setRecords([]);
-
-      setPage(0);
-
-      setHasMore(false);
-
       await loadRecords(
         1,
         false
@@ -1266,17 +1248,22 @@ function App() {
 
       await loadObjectCounts();
     } catch (err) {
-      setError(err.message);
+      console.error(
+        "Update error:",
+        err
+      );
+
+      setError(
+        err.message
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  /*
-   * ==========================================
-   * DELETE RECORD
-   * ==========================================
-   */
+  /* =======================================================
+     DELETE RECORD
+  ======================================================= */
 
   async function deleteRecord(
     record
@@ -1362,17 +1349,22 @@ function App() {
         `${objectName} deleted successfully.`
       );
     } catch (err) {
-      setError(err.message);
+      console.error(
+        "Delete error:",
+        err
+      );
+
+      setError(
+        err.message
+      );
     } finally {
       setDeleting(false);
     }
   }
 
-  /*
-   * ==========================================
-   * SEARCH
-   * ==========================================
-   */
+  /* =======================================================
+     SEARCH
+  ======================================================= */
 
   const filteredRecords =
     records.filter(
@@ -1391,20 +1383,16 @@ function App() {
         return Object.values(
           record
         ).some((value) =>
-          String(
-            value ?? ""
-          )
+          String(value ?? "")
             .toLowerCase()
             .includes(search)
         );
       }
     );
 
-  /*
-   * ==========================================
-   * LOADING SCREEN
-   * ==========================================
-   */
+  /* =======================================================
+     AUTH CHECK LOADING SCREEN
+  ======================================================= */
 
   if (checkingAuth) {
     return (
@@ -1421,19 +1409,17 @@ function App() {
           </h2>
 
           <p>
-            Checking your secure
-            Salesforce session...
+            Checking your secure Salesforce
+            session...
           </p>
         </div>
       </div>
     );
   }
 
-  /*
-   * ==========================================
-   * LOGIN SCREEN
-   * ==========================================
-   */
+  /* =======================================================
+     LOGIN PAGE
+  ======================================================= */
 
   if (!authenticated) {
     return (
@@ -1497,14 +1483,14 @@ function App() {
                   return (
                     <div
                       className="login-feature"
-                      key={
-                        object
-                      }
+                      key={object}
                     >
                       <div
                         className={`feature-icon ${meta.color}`}
                       >
-                        {meta.icon}
+                        {
+                          meta.icon
+                        }
                       </div>
 
                       <div>
@@ -1541,9 +1527,9 @@ function App() {
             </h2>
 
             <p>
-              Sign in with your
-              Salesforce Developer Org
-              to access your records.
+              Sign in with your Salesforce
+              Developer Org to access your
+              records.
             </p>
 
             <button
@@ -1559,16 +1545,19 @@ function App() {
 
             <div className="login-security">
               <span>✓</span>
+
               OAuth 2.0 authentication
             </div>
 
             <div className="login-security">
               <span>✓</span>
+
               No Salesforce password stored
             </div>
 
             <div className="login-security">
               <span>✓</span>
+
               Secure session-based access
             </div>
           </section>
@@ -1581,14 +1570,16 @@ function App() {
     );
   }
 
-  /*
-   * ==========================================
-   * DASHBOARD
-   * ==========================================
-   */
+  /* =======================================================
+     DASHBOARD
+  ======================================================= */
 
   return (
     <div className="dashboard">
+      {/* =================================================
+          TOP BAR
+      ================================================= */}
+
       <header className="topbar">
         <div className="brand">
           <div className="brand-icon">
@@ -1609,6 +1600,7 @@ function App() {
         <div className="topbar-right">
           <div className="connected">
             <span></span>
+
             Salesforce Connected
           </div>
 
@@ -1625,7 +1617,15 @@ function App() {
         </div>
       </header>
 
+      {/* =================================================
+          MAIN CONTENT
+      ================================================= */}
+
       <main className="dashboard-content">
+        {/* =================================================
+            WELCOME
+        ================================================= */}
+
         <section className="welcome-section">
           <div>
             <div className="section-label">
@@ -1644,9 +1644,14 @@ function App() {
 
           <div className="workspace-badge">
             <span>●</span>
+
             Developer Org
           </div>
         </section>
+
+        {/* =================================================
+            OBJECT SELECTOR
+        ================================================= */}
 
         <section className="object-selector-card">
           <div className="selector-info">
@@ -1666,8 +1671,8 @@ function App() {
               </h2>
 
               <p>
-                Choose one of the five
-                standard Salesforce objects.
+                Choose one of the five standard
+                Salesforce objects.
               </p>
             </div>
           </div>
@@ -1675,9 +1680,7 @@ function App() {
           <div className="select-wrapper">
             <select
               value={objectName}
-              onChange={
-                changeObject
-              }
+              onChange={changeObject}
             >
               {OBJECTS.map(
                 (object) => (
@@ -1698,6 +1701,10 @@ function App() {
             <span>⌄</span>
           </div>
         </section>
+
+        {/* =================================================
+            OBJECT STATS
+        ================================================= */}
 
         <section className="stats-grid">
           {OBJECTS.map(
@@ -1745,8 +1752,7 @@ function App() {
                     </strong>
 
                     <small>
-                      Salesforce
-                      records
+                      Salesforce records
                     </small>
                   </div>
                 </button>
@@ -1754,6 +1760,10 @@ function App() {
             }
           )}
         </section>
+
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
         {error && (
           <div className="alert error-alert">
@@ -1766,7 +1776,9 @@ function App() {
                 Something went wrong
               </strong>
 
-              <p>{error}</p>
+              <p>
+                {error}
+              </p>
             </div>
 
             <button
@@ -1778,6 +1790,10 @@ function App() {
             </button>
           </div>
         )}
+
+        {/* =================================================
+            SUCCESS
+        ================================================= */}
 
         {successMessage && (
           <div className="alert success-alert">
@@ -1807,7 +1823,15 @@ function App() {
           </div>
         )}
 
+        {/* =================================================
+            RECORDS SECTION
+        ================================================= */}
+
         <section className="records-section">
+          {/* =================================================
+              RECORD HEADER
+          ================================================= */}
+
           <div className="records-header">
             <div className="records-title">
               <div
@@ -1818,7 +1842,9 @@ function App() {
 
               <div>
                 <h2>
-                  {currentMeta.label}
+                  {
+                    currentMeta.label
+                  }
                 </h2>
 
                 <p>
@@ -1840,13 +1866,19 @@ function App() {
             </div>
           </div>
 
+          {/* =================================================
+              TOOLBAR
+          ================================================= */}
+
           <div className="toolbar">
             <div className="search-box">
               <span>⌕</span>
 
               <input
                 type="text"
-                value={searchTerm}
+                value={
+                  searchTerm
+                }
                 onChange={(
                   event
                 ) =>
@@ -1893,242 +1925,236 @@ function App() {
             </div>
           </div>
 
-          {/*
-           * ========================================
-           * IMPORTANT SCROLL CONTAINER
-           * ========================================
-           *
-           * The user scrolls INSIDE this element.
-           *
-           * The IntersectionObserver above uses
-           * this element as its root.
-           */}
+          {/* =================================================
+              LOADING FIRST 20
+          ================================================= */}
 
           {loading ? (
             <div className="records-loading">
               <div className="spinner"></div>
 
               <h3>
-                Loading Salesforce records...
+                Loading Salesforce
+                records...
               </h3>
 
               <p>
-                Loading first{" "}
-                {PAGE_SIZE} records...
+                Retrieving your data from
+                Salesforce.
               </p>
             </div>
           ) : (
-            <div
-              className="table-wrapper"
-              ref={tableWrapperRef}
-            >
-              <table>
-                <thead>
-                  <tr>
-                    {fields.map(
-                      (field) => (
-                        <th
-                          key={field}
-                        >
-                          {getLabel(
-                            field
-                          )}
-                        </th>
-                      )
-                    )}
+            <>
+              {/* =================================================
+                  TABLE
+              ================================================= */}
 
-                    <th className="actions-heading">
-                      ACTIONS
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredRecords.length ===
-                  0 ? (
+              <div className="table-wrapper">
+                <table>
+                  <thead>
                     <tr>
-                      <td
-                        colSpan={
-                          fields.length +
-                          1
-                        }
-                      >
-                        <div className="empty-state">
-                          <div>
-                            {searchTerm
-                              ? "⌕"
-                              : currentMeta.icon}
-                          </div>
+                      {fields.map(
+                        (field) => (
+                          <th
+                            key={
+                              field
+                            }
+                          >
+                            {getLabel(
+                              field
+                            )}
+                          </th>
+                        )
+                      )}
 
-                          <h3>
-                            {searchTerm
-                              ? "No matching records"
-                              : `No ${currentMeta.label.toLowerCase()} found`}
-                          </h3>
-
-                          <p>
-                            {searchTerm
-                              ? "Try a different search."
-                              : "Create your first record to get started."}
-                          </p>
-
-                          {!searchTerm && (
-                            <button
-                              className="create-button"
-                              onClick={
-                                openCreate
-                              }
-                            >
-                              + Create{" "}
-                              {
-                                objectName
-                              }
-                            </button>
-                          )}
-                        </div>
-                      </td>
+                      <th className="actions-heading">
+                        ACTIONS
+                      </th>
                     </tr>
-                  ) : (
-                    filteredRecords.map(
-                      (record) => (
-                        <tr
-                          key={
-                            record.Id
+                  </thead>
+
+                  <tbody>
+                    {filteredRecords.length ===
+                    0 ? (
+                      <tr>
+                        <td
+                          colSpan={
+                            fields.length +
+                            1
                           }
                         >
-                          {fields.map(
-                            (field) => {
-                              const value =
-                                record[
-                                  field
-                                ];
+                          <div className="empty-state">
+                            <div>
+                              {searchTerm
+                                ? "⌕"
+                                : currentMeta.icon}
+                            </div>
 
-                              const badge =
-                                getBadgeClass(
-                                  field,
-                                  value
-                                );
+                            <h3>
+                              {searchTerm
+                                ? "No matching records"
+                                : `No ${currentMeta.label.toLowerCase()} found`}
+                            </h3>
 
-                              if (
-                                field ===
-                                  "Name" ||
-                                field ===
-                                  "Subject"
-                              ) {
+                            <p>
+                              {searchTerm
+                                ? "Try a different search."
+                                : "Create your first record to get started."}
+                            </p>
+
+                            {!searchTerm && (
+                              <button
+                                className="create-button"
+                                onClick={
+                                  openCreate
+                                }
+                              >
+                                + Create{" "}
+                                {
+                                  objectName
+                                }
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredRecords.map(
+                        (record) => (
+                          <tr
+                            key={
+                              record.Id
+                            }
+                          >
+                            {fields.map(
+                              (
+                                field
+                              ) => {
+                                const value =
+                                  record[
+                                    field
+                                  ];
+
+                                const badge =
+                                  getBadgeClass(
+                                    field,
+                                    value
+                                  );
+
+                                if (
+                                  field ===
+                                    "Name" ||
+                                  field ===
+                                    "Subject"
+                                ) {
+                                  return (
+                                    <td
+                                      key={
+                                        field
+                                      }
+                                    >
+                                      <div className="record-name">
+                                        <div
+                                          className={`record-avatar ${currentMeta.color}`}
+                                        >
+                                          {getInitials(
+                                            record,
+                                            objectName
+                                          )}
+                                        </div>
+
+                                        <div>
+                                          <strong>
+                                            {formatValue(
+                                              value
+                                            )}
+                                          </strong>
+
+                                          <span>
+                                            {
+                                              objectName
+                                            }
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  );
+                                }
+
                                 return (
                                   <td
                                     key={
                                       field
                                     }
                                   >
-                                    <div className="record-name">
-                                      <div
-                                        className={`record-avatar ${currentMeta.color}`}
+                                    {badge ? (
+                                      <span
+                                        className={`status-badge ${badge}`}
                                       >
-                                        {getInitials(
-                                          record,
-                                          objectName
+                                        {formatValue(
+                                          value
                                         )}
-                                      </div>
-
-                                      <div>
-                                        <strong>
-                                          {formatValue(
-                                            value
-                                          )}
-                                        </strong>
-
-                                        <span>
-                                          {
-                                            objectName
-                                          }
-                                        </span>
-                                      </div>
-                                    </div>
+                                      </span>
+                                    ) : (
+                                      formatValue(
+                                        value
+                                      )
+                                    )}
                                   </td>
                                 );
                               }
+                            )}
 
-                              return (
-                                <td
-                                  key={
-                                    field
+                            <td>
+                              <div className="row-actions">
+                                <button
+                                  className="view-action"
+                                  onClick={() =>
+                                    openView(
+                                      record
+                                    )
                                   }
                                 >
-                                  {badge ? (
-                                    <span
-                                      className={`status-badge ${badge}`}
-                                    >
-                                      {formatValue(
-                                        value
-                                      )}
-                                    </span>
-                                  ) : (
-                                    formatValue(
-                                      value
+                                  👁 View
+                                </button>
+
+                                <button
+                                  className="edit-action"
+                                  onClick={() =>
+                                    openEdit(
+                                      record
                                     )
-                                  )}
-                                </td>
-                              );
-                            }
-                          )}
+                                  }
+                                >
+                                  ✏ Edit
+                                </button>
 
-                          <td>
-                            <div className="row-actions">
-                              <button
-                                className="view-action"
-                                onClick={() =>
-                                  openView(
-                                    record
-                                  )
-                                }
-                              >
-                                👁 View
-                              </button>
-
-                              <button
-                                className="edit-action"
-                                onClick={() =>
-                                  openEdit(
-                                    record
-                                  )
-                                }
-                              >
-                                ✏ Edit
-                              </button>
-
-                              <button
-                                className="delete-action"
-                                disabled={
-                                  deleting
-                                }
-                                onClick={() =>
-                                  deleteRecord(
-                                    record
-                                  )
-                                }
-                              >
-                                🗑 Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                                <button
+                                  className="delete-action"
+                                  disabled={
+                                    deleting
+                                  }
+                                  onClick={() =>
+                                    deleteRecord(
+                                      record
+                                    )
+                                  }
+                                >
+                                  🗑 Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
                       )
-                    )
-                  )}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-              {/*
-               * ======================================
-               * PAGINATION SENTINEL
-               * ======================================
-               *
-               * This is INSIDE table-wrapper.
-               *
-               * When this comes into view, the next
-               * 20 records are loaded.
-               */}
+              {/* =================================================
+                  INFINITE SCROLL LOADER
+              ================================================= */}
 
               <div
                 className="scroll-loader"
@@ -2138,19 +2164,18 @@ function App() {
                   <div className="loading-more">
                     <div className="small-spinner"></div>
 
-                    <strong>
+                    <span>
                       Loading next 20
                       records...
-                    </strong>
+                    </span>
                   </div>
                 )}
 
                 {!loadingMore &&
                   hasMore && (
                     <div className="scroll-hint">
-                      ↓ Scroll down to
-                      load the next 20
-                      records
+                      ↓ Scroll down to load
+                      the next 20 records
                     </div>
                   )}
 
@@ -2159,29 +2184,24 @@ function App() {
                   records.length >
                     0 && (
                     <div className="all-loaded">
-                      ✓ All{" "}
-                      {records.length.toLocaleString()}{" "}
-                      loaded records
+                      ✓ All Salesforce
+                      records loaded
                     </div>
                   )}
               </div>
-            </div>
+            </>
           )}
         </section>
       </main>
 
-      {/*
-       * ==========================================
-       * VIEW MODAL
-       * ==========================================
-       */}
+      {/* =====================================================
+          VIEW MODAL
+      ===================================================== */}
 
       {modal === "view" && (
         <div
           className="modal-overlay"
-          onMouseDown={(
-            event
-          ) => {
+          onMouseDown={(event) => {
             if (
               event.target ===
               event.currentTarget
@@ -2198,8 +2218,7 @@ function App() {
                 </span>
 
                 <h2>
-                  View{" "}
-                  {objectName}
+                  View {objectName}
                 </h2>
               </div>
 
@@ -2289,19 +2308,15 @@ function App() {
         </div>
       )}
 
-      {/*
-       * ==========================================
-       * CREATE / EDIT MODAL
-       * ==========================================
-       */}
+      {/* =====================================================
+          CREATE / EDIT MODAL
+      ===================================================== */}
 
       {(modal === "create" ||
         modal === "edit") && (
         <div
           className="modal-overlay"
-          onMouseDown={(
-            event
-          ) => {
+          onMouseDown={(event) => {
             if (
               event.target ===
               event.currentTarget
@@ -2403,22 +2418,7 @@ function App() {
                         ) : (
                           <input
                             type={
-                              field ===
-                              "Phone"
-                                ? "tel"
-                                : inputType
-                            }
-                            inputMode={
-                              field ===
-                              "Phone"
-                                ? "numeric"
-                                : undefined
-                            }
-                            pattern={
-                              field ===
-                              "Phone"
-                                ? "[0-9]*"
-                                : undefined
+                              inputType
                             }
                             value={
                               formData[
@@ -2426,6 +2426,13 @@ function App() {
                               ] ??
                               ""
                             }
+                            inputMode={
+                              field ===
+                              "Phone"
+                                ? "tel"
+                                : undefined
+                            }
+                            autoComplete="off"
                             onChange={(
                               event
                             ) =>
