@@ -11,8 +11,7 @@ const app = express();
    CONFIGURATION
 ========================================================= */
 
-const PORT =
-  process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL ||
@@ -68,9 +67,26 @@ if (!CLIENT_SECRET) {
   );
 }
 
+if (
+  IS_PRODUCTION &&
+  SESSION_SECRET === "change-this-secret"
+) {
+  console.warn(
+    "WARNING: SESSION_SECRET is using the default value in production."
+  );
+}
+
 /* =========================================================
-   EXPRESS
+   EXPRESS / PROXY
 ========================================================= */
+
+/*
+ * Render runs behind a proxy.
+ *
+ * trust proxy is important when using secure cookies
+ * because Render terminates HTTPS before forwarding
+ * the request to Node.js.
+ */
 
 if (IS_PRODUCTION) {
   app.set("trust proxy", 1);
@@ -85,15 +101,23 @@ app.use(express.json());
 app.use(
   cors({
     origin: function (origin, callback) {
+      /*
+       * Allow requests such as Postman/server-side requests
+       * where Origin may not exist.
+       */
+
       if (!origin) {
         return callback(null, true);
       }
 
-      if (
-        ALLOWED_FRONTENDS.includes(origin)
-      ) {
+      if (ALLOWED_FRONTENDS.includes(origin)) {
         return callback(null, true);
       }
+
+      console.error(
+        "CORS blocked origin:",
+        origin
+      );
 
       return callback(
         new Error(
@@ -110,20 +134,46 @@ app.use(
    SESSION
 ========================================================= */
 
+/*
+ * IMPORTANT:
+ *
+ * Frontend:
+ * https://salesforce-crud-frontend-gaco.onrender.com
+ *
+ * Backend:
+ * https://salesforce-crud-backend-rffk.onrender.com
+ *
+ * They are different origins, so production requires:
+ *
+ * secure: true
+ * sameSite: "none"
+ *
+ * The browser can then send the session cookie
+ * with credentials: "include".
+ */
+
 app.use(
   session({
+    name: "connect.sid",
+
     secret: SESSION_SECRET,
 
     resave: false,
 
     saveUninitialized: false,
 
+    proxy: IS_PRODUCTION,
+
     cookie: {
       httpOnly: true,
 
       secure: IS_PRODUCTION,
 
-      sameSite: "none",
+      sameSite: IS_PRODUCTION
+        ? "none"
+        : "lax",
+
+      path: "/",
 
       maxAge:
         1000 * 60 * 60,
@@ -132,7 +182,7 @@ app.use(
 );
 
 /* =========================================================
-   PKCE
+   PKCE HELPERS
 ========================================================= */
 
 function base64UrlEncode(buffer) {
@@ -149,9 +199,7 @@ function createCodeVerifier() {
   );
 }
 
-function createCodeChallenge(
-  verifier
-) {
+function createCodeChallenge(verifier) {
   return base64UrlEncode(
     crypto
       .createHash("sha256")
@@ -187,6 +235,21 @@ app.get(
 
       apiVersion:
         API_VERSION,
+
+      production:
+        IS_PRODUCTION,
+
+      sessionCookie: {
+        name: "connect.sid",
+
+        secure:
+          IS_PRODUCTION,
+
+        sameSite:
+          IS_PRODUCTION
+            ? "none"
+            : "lax",
+      },
     });
   }
 );
@@ -218,6 +281,9 @@ app.get(
 
       apiVersion:
         API_VERSION,
+
+      production:
+        IS_PRODUCTION,
     });
   }
 );
@@ -247,8 +313,7 @@ app.get(
       }
 
       /*
-       * Remember which frontend started
-       * the OAuth login.
+       * Remember which frontend started OAuth.
        */
 
       const requestedFrontend =
@@ -263,6 +328,10 @@ app.get(
 
       req.session.frontendUrl =
         frontendForRedirect;
+
+      /*
+       * Create PKCE values.
+       */
 
       const codeVerifier =
         createCodeVerifier();
@@ -280,6 +349,10 @@ app.get(
 
       req.session.oauthState =
         state;
+
+      /*
+       * Build Salesforce authorization URL.
+       */
 
       const params =
         new URLSearchParams({
@@ -334,6 +407,11 @@ app.get(
       );
 
       console.log(
+        "Session ID:",
+        req.sessionID
+      );
+
+      console.log(
         "=========================================="
       );
 
@@ -370,6 +448,33 @@ app.get(
         error_description,
       } = req.query;
 
+      console.log(
+        "=========================================="
+      );
+
+      console.log(
+        "Salesforce OAuth callback received"
+      );
+
+      console.log(
+        "Session ID:",
+        req.sessionID
+      );
+
+      console.log(
+        "Has code:",
+        Boolean(code)
+      );
+
+      console.log(
+        "Has state:",
+        Boolean(state)
+      );
+
+      console.log(
+        "=========================================="
+      );
+
       if (error) {
         console.error(
           "Salesforce OAuth error:",
@@ -395,17 +500,29 @@ app.get(
           );
       }
 
+      /*
+       * Validate OAuth state.
+       */
+
       if (
         !state ||
         state !==
           req.session.oauthState
       ) {
+        console.error(
+          "Invalid OAuth state."
+        );
+
         return res
           .status(400)
           .send(
             "Invalid OAuth state."
           );
       }
+
+      /*
+       * Retrieve PKCE verifier.
+       */
 
       const codeVerifier =
         req.session.codeVerifier;
@@ -417,6 +534,10 @@ app.get(
             "PKCE code verifier missing from session."
           );
       }
+
+      /* =====================================================
+         TOKEN EXCHANGE
+      ===================================================== */
 
       const tokenParams =
         new URLSearchParams();
@@ -517,6 +638,10 @@ app.get(
           });
       }
 
+      /* =====================================================
+         SAVE SALESFORCE SESSION
+      ===================================================== */
+
       req.session.salesforce = {
         accessToken:
           tokenData.access_token,
@@ -533,11 +658,14 @@ app.get(
       };
 
       delete req.session.codeVerifier;
+
       delete req.session.oauthState;
 
       const frontendRedirect =
         req.session.frontendUrl ||
         FRONTEND_URL;
+
+      delete req.session.frontendUrl;
 
       console.log(
         "=========================================="
@@ -553,6 +681,11 @@ app.get(
       );
 
       console.log(
+        "Session ID:",
+        req.sessionID
+      );
+
+      console.log(
         "Redirecting to:",
         frontendRedirect
       );
@@ -562,11 +695,11 @@ app.get(
       );
 
       /*
-       * Explicitly save the session before
-       * redirecting to the frontend.
+       * IMPORTANT:
        *
-       * This is important for localhost
-       * + deployed backend sessions.
+       * Explicitly save the session before redirecting.
+       * This ensures the Salesforce session is persisted
+       * before the browser leaves the callback route.
        */
 
       req.session.save(
@@ -583,6 +716,26 @@ app.get(
                 "Could not save Salesforce session."
               );
           }
+
+          console.log(
+            "Session saved successfully."
+          );
+
+          console.log(
+            "Session cookie configuration:",
+            {
+              secure:
+                IS_PRODUCTION,
+
+              sameSite:
+                IS_PRODUCTION
+                  ? "none"
+                  : "lax",
+
+              httpOnly:
+                true,
+            }
+          );
 
           res.redirect(
             frontendRedirect
@@ -611,6 +764,23 @@ app.get(
 app.get(
   "/auth/status",
   (req, res) => {
+    console.log(
+      "Auth status request"
+    );
+
+    console.log(
+      "Session ID:",
+      req.sessionID
+    );
+
+    console.log(
+      "Authenticated:",
+      Boolean(
+        req.session &&
+        req.session.salesforce
+      )
+    );
+
     if (
       req.session &&
       req.session.salesforce
@@ -637,6 +807,9 @@ app.get(
 app.get(
   "/auth/logout",
   (req, res) => {
+    const sessionId =
+      req.sessionID;
+
     req.session.destroy(
       (error) => {
         if (error) {
@@ -652,6 +825,28 @@ app.get(
                 "Logout failed.",
             });
         }
+
+        console.log(
+          "Session destroyed:",
+          sessionId
+        );
+
+        res.clearCookie(
+          "connect.sid",
+          {
+            httpOnly: true,
+
+            secure:
+              IS_PRODUCTION,
+
+            sameSite:
+              IS_PRODUCTION
+                ? "none"
+                : "lax",
+
+            path: "/",
+          }
+        );
 
         res.json({
           success: true,
@@ -719,7 +914,7 @@ const fieldMap = {
 };
 
 /* =========================================================
-   SALESFORCE SESSION
+   SALESFORCE SESSION HELPER
 ========================================================= */
 
 function getSalesforceSession(req) {
@@ -735,6 +930,7 @@ function getSalesforceSession(req) {
 
 /* =========================================================
    GET RECORDS
+   20 RECORDS PER REQUEST
 ========================================================= */
 
 app.get(
@@ -773,6 +969,11 @@ app.get(
           ? requestedPage
           : 1;
 
+      /*
+       * Assignment requirement:
+       * exactly 20 records per load.
+       */
+
       const pageSize = 20;
 
       const offset =
@@ -795,6 +996,10 @@ app.get(
         accessToken,
         instanceUrl,
       } = salesforce;
+
+      /* =====================================================
+         COUNT
+      ===================================================== */
 
       const countQuery =
         `SELECT COUNT() ` +
@@ -851,12 +1056,21 @@ app.get(
           countData.totalSize || 0
         );
 
+      /* =====================================================
+         PAGINATED QUERY
+      ===================================================== */
+
       const query =
         `SELECT ${fieldMap[objectName]} ` +
         `FROM ${objectName} ` +
         `ORDER BY CreatedDate DESC, Id ASC ` +
         `LIMIT ${pageSize} ` +
         `OFFSET ${offset}`;
+
+      console.log(
+        `Loading ${objectName} page ${page} ` +
+        `(20 records, offset ${offset})`
+      );
 
       const url =
         `${instanceUrl}` +
@@ -1340,7 +1554,7 @@ app.use(
 );
 
 /* =========================================================
-   START
+   START SERVER
 ========================================================= */
 
 app.listen(
@@ -1380,6 +1594,27 @@ app.listen(
         CLIENT_ID &&
         CLIENT_SECRET
       )
+    );
+
+    console.log(
+      "Production:",
+      IS_PRODUCTION
+    );
+
+    console.log(
+      "Session cookie: connect.sid"
+    );
+
+    console.log(
+      "Secure cookie:",
+      IS_PRODUCTION
+    );
+
+    console.log(
+      "SameSite:",
+      IS_PRODUCTION
+        ? "none"
+        : "lax"
     );
 
     console.log(
