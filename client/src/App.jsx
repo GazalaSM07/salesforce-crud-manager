@@ -7,7 +7,7 @@ import {
 
 import "./App.css";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://salesforce-crud-backend-new-backend.onrender.com";
 
 const PAGE_SIZE = 20;
 
